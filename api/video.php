@@ -59,7 +59,13 @@ if ($token) {
     if ($res) {
         $dmJson = json_decode($res, true);
         if (isset($dmJson['embed_url']) && !empty($dmJson['embed_url'])) {
-            $authorizedEmbedUrl = $dmJson['embed_url'] . (strpos($dmJson['embed_url'], '?') !== false ? '&' : '?') . $dmParams;
+            $embed = $dmJson['embed_url'];
+            // Force use of xtv3w Enterprise Player (enable_dm_logo: false, enable_sharing: false, watermark: none)
+            $embed = str_replace('/player.html', '/player/xtv3w.html', $embed);
+            if (strpos($embed, '/player/xtv3w.html') === false && preg_match('/video=([a-zA-Z0-9]+)/', $embed, $vm)) {
+                $embed = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $vm[1];
+            }
+            $authorizedEmbedUrl = $embed . (strpos($embed, '?') !== false ? '&' : '?') . $dmParams;
             $video['title'] = $dmJson['title'] ?? $video['title'];
         }
     }
