@@ -2,11 +2,14 @@
 // backend/admin/includes/sidebar.php
 $activePage = $activePage ?? 'dashboard';
 ?>
-<!-- SIDEBAR COMPONENT (LIGHT THEME) -->
-<aside id="sidebar" class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 md:sticky md:top-0 md:h-screen transition-all duration-300 z-40">
-    <!-- Brand / Logo Header -->
-    <div class="h-16 flex items-center px-6 gap-3 border-b border-slate-100 bg-white">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-brand-500 flex items-center justify-center shadow-md shadow-indigo-500/20 text-white font-bold">
+<!-- MOBILE BACKDROP -->
+<div id="sidebarBackdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden md:hidden"></div>
+
+<!-- STICKY SIDEBAR (INDEPENDENT SCROLL) -->
+<aside id="sidebar" class="w-64 h-full bg-white border-r border-slate-200 flex flex-col shrink-0 z-50 fixed inset-y-0 left-0 -translate-x-full md:static md:translate-x-0 transition-transform duration-200 ease-in-out select-none">
+    <!-- Brand / Logo Header (Pinned Top) -->
+    <div class="h-16 shrink-0 flex items-center px-6 gap-3 border-b border-slate-100 bg-white">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-brand-500 flex items-center justify-center shadow-md shadow-indigo-500/20 text-white font-bold shrink-0">
             <i data-lucide="play" class="w-5 h-5 fill-current"></i>
         </div>
         <div class="flex-1 truncate">
@@ -17,7 +20,7 @@ $activePage = $activePage ?? 'dashboard';
         </div>
     </div>
 
-    <!-- Navigation Links (Multi-Page PHP) -->
+    <!-- Navigation Links (Independent Scroll) -->
     <nav class="p-4 space-y-1.5 flex-1 overflow-y-auto">
         <p class="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Main Navigation</p>
 
@@ -71,14 +74,14 @@ $activePage = $activePage ?? 'dashboard';
         </div>
     </nav>
 
-    <!-- Admin Account Profile & Logout Footer -->
-    <div class="p-4 border-t border-slate-100 bg-slate-50/70">
+    <!-- Admin Account Profile & Logout Footer (Pinned Bottom) -->
+    <div class="p-4 shrink-0 border-t border-slate-100 bg-slate-50/70">
         <div class="flex items-center gap-3 mb-3">
-            <div class="w-9 h-9 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-sm">
+            <div class="w-9 h-9 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">
                 A
             </div>
             <div class="truncate flex-1">
-                <p class="text-xs font-bold text-slate-800 truncate"><?= htmlspecialchars($_SESSION['admin_name'] ?? 'Administrator') ?></p>
+                <p class="text-xs font-bold text-slate-800 truncate"><?= htmlspecialchars($_SESSION['admin_name'] ?? 'Super Admin') ?></p>
                 <p class="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> System Online
                 </p>
@@ -91,3 +94,17 @@ $activePage = $activePage ?? 'dashboard';
         </button>
     </div>
 </aside>
+
+<script>
+    function toggleSidebar() {
+        var sidebar = document.getElementById('sidebar');
+        var backdrop = document.getElementById('sidebarBackdrop');
+        if (sidebar.classList.contains('-translate-x-full')) {
+            sidebar.classList.remove('-translate-x-full');
+            if (backdrop) backdrop.classList.remove('hidden');
+        } else {
+            sidebar.classList.add('-translate-x-full');
+            if (backdrop) backdrop.classList.add('hidden');
+        }
+    }
+</script>

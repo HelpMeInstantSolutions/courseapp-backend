@@ -27,7 +27,7 @@ $pageTitle = $pageTitle ?? 'Admin Dashboard';
 $activePage = $activePage ?? 'dashboard';
 ?>
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-50">
+<html lang="en" class="h-full overflow-hidden bg-slate-50">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -71,7 +71,7 @@ $activePage = $activePage ?? 'dashboard';
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="h-full bg-slate-50 text-slate-800 antialiased flex flex-col md:flex-row">
+<body class="h-full w-full overflow-hidden bg-slate-50 text-slate-800 antialiased flex flex-row">
     <!-- Client-side Auth Check -->
     <script>
         (function() {
