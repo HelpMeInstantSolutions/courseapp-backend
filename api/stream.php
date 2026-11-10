@@ -61,7 +61,21 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
 ]);
 $metaRes = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlErr = curl_error($ch);
 curl_close($ch);
+
+if (isset($_GET['debug'])) {
+    echo json_encode([
+        "token_exists" => !empty($token),
+        "embedUrl" => $embedUrl,
+        "tokenOrId" => $tokenOrId,
+        "metaUrl" => $metaUrl,
+        "httpCode" => $httpCode,
+        "curlErr" => $curlErr,
+        "metaRes" => json_decode($metaRes, true) ?: substr($metaRes, 0, 500)
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    exit();
+}
 
 $metaJson = json_decode($metaRes, true);
 $rawManifestUrl = null;
