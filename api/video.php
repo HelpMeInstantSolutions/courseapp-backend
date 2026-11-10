@@ -26,8 +26,7 @@ if ($id > 0) {
 }
 
 if (!$video) {
-    // If not in database, create fallback structure
-    $cleanId = $vidIdParam ?: 'x98hbpm';
+    $cleanId = $vidIdParam ?: 'x992mce';
     $video = [
         'id' => 0,
         'title' => 'Video Stream',
@@ -42,58 +41,69 @@ if (preg_match('/(?:dailymotion\.com\/(?:video|hub)\/|dai\.ly\/)([a-zA-Z0-9]+)/'
 }
 $video['clean_dm_id'] = $cleanId;
 
-// Dailymotion API Credentials for Signed Private Playback
-$apiKey = '2f565bdf5ec09e7464db';
-$apiSecret = '6494629f246182ce9acd3c066a7ab5fae5598a06';
+$token = getOwnerToken();
 
-$accessToken = getDailymotionAccessToken($apiKey, $apiSecret);
-$video['access_token'] = $accessToken;
+// Query Dailymotion API directly with Owner Bearer Token to get authenticated embed URL
+$authorizedEmbedUrl = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $cleanId . "&autoplay=1&mute=0&controls=1";
 
-// Construct Authorized Geo Player with Access Token and Native Handshake
-if ($accessToken) {
-    $video['embed_url'] = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $cleanId . "&customConfig[accessToken]=" . urlencode($accessToken) . "&autoplay=1&mute=0&controls=1";
-} else {
-    $video['embed_url'] = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $cleanId . "&autoplay=1&mute=0&controls=1";
-}
-
-sendResponse(true, "Video details retrieved with OAuth access token", $video);
-
-function getDailymotionAccessToken($key, $secret) {
-    // Cache token in local file for performance (10 hours validity)
-    $cacheFile = __DIR__ . '/../database/dm_token.json';
-    if (file_exists($cacheFile)) {
-        $cached = json_decode(file_get_contents($cacheFile), true);
-        if ($cached && isset($cached['expires_at']) && time() < ($cached['expires_at'] - 300)) {
-            return $cached['token'];
-        }
-    }
-
-    $ch = curl_init('https://api.dailymotion.com/oauth/token');
+if ($token) {
+    $ch = curl_init("https://api.dailymotion.com/video/" . $cleanId . "?fields=id,title,embed_url,private");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-        'grant_type' => 'client_credentials',
-        'client_id' => $key,
-        'client_secret' => $secret,
-        'scope' => 'read'
-    ]));
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $token]);
+    curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-
-    $response = curl_exec($ch);
+    $res = curl_exec($ch);
     curl_close($ch);
 
-    if ($response) {
-        $res = json_decode($response, true);
-        if (isset($res['access_token'])) {
-            $token = $res['access_token'];
-            $expiresAt = time() + ($res['expires_in'] ?? 36000);
-            @file_put_contents($cacheFile, json_encode([
-                'token' => $token,
-                'expires_at' => $expiresAt
-            ]));
-            return $token;
+    if ($res) {
+        $dmJson = json_decode($res, true);
+        if (isset($dmJson['embed_url']) && !empty($dmJson['embed_url'])) {
+            $authorizedEmbedUrl = $dmJson['embed_url'] . (strpos($dmJson['embed_url'], '?') !== false ? '&' : '?') . "autoplay=1&mute=0&controls=1";
+            $video['title'] = $dmJson['title'] ?? $video['title'];
         }
     }
-    return null;
+}
+
+$video['embed_url'] = $authorizedEmbedUrl;
+$video['access_token'] = $token;
+
+sendResponse(true, "Video details retrieved with Owner Authorized Private Stream", $video);
+
+function getOwnerToken() {
+    $tokenFile = __DIR__ . '/../database/dm_user_token.json';
+    if (!file_exists($tokenFile)) {
+        return null;
+    }
+
+    $tokenData = json_decode(file_get_contents($tokenFile), true);
+    if (!$tokenData || !isset($tokenData['access_token'])) {
+        return null;
+    }
+
+    // If token expired, auto refresh using refresh_token
+    if (isset($tokenData['expires_at']) && time() > ($tokenData['expires_at'] - 300) && isset($tokenData['refresh_token'])) {
+        $ch = curl_init('https://api.dailymotion.com/oauth/token');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+            'grant_type' => 'refresh_token',
+            'client_id' => '2f565bdf5ec09e7464db',
+            'client_secret' => '6494629f246182ce9acd3c066a7ab5fae5598a06',
+            'refresh_token' => $tokenData['refresh_token']
+        ]));
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $res = curl_exec($ch);
+        curl_close($ch);
+
+        if ($res) {
+            $newTokens = json_decode($res, true);
+            if (isset($newTokens['access_token'])) {
+                $newTokens['expires_at'] = time() + ($newTokens['expires_in'] ?? 36000);
+                file_put_contents($tokenFile, json_encode($newTokens));
+                return $newTokens['access_token'];
+            }
+        }
+    }
+
+    return $tokenData['access_token'];
 }
