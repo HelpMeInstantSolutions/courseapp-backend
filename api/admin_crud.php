@@ -98,6 +98,8 @@ switch ($action) {
             sendResponse(false, "Could not connect to Dailymotion", null, 500);
         }
         break;
+
+    case 'stats':
         $totalCourses = $pdo->query("SELECT COUNT(*) FROM courses")->fetchColumn();
         $totalVideos = $pdo->query("SELECT COUNT(*) FROM videos")->fetchColumn();
         $totalCategories = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();

@@ -1,552 +1,266 @@
 <?php
 // backend/admin/index.php
 $pageTitle = 'Dashboard Overview';
-$activeNav = 'dashboard';
+$activePage = 'dashboard';
+$headerTitle = 'Dashboard Overview';
+$headerSubtitle = 'Real-time overview of courses, private Dailymotion videos, and enrolled students';
+
 require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/sidebar.php';
+
+// Fetch recent videos with course title
+$recentVideos = [];
+try {
+    $stmt = $pdo->query("SELECT v.*, c.title AS course_title 
+                         FROM videos v 
+                         LEFT JOIN courses c ON v.course_id = c.id 
+                         ORDER BY v.id DESC LIMIT 6");
+    $recentVideos = $stmt->fetchAll();
+} catch (Exception $e) {}
+
+// Fetch recent students
+$recentUsers = [];
+try {
+    $stmt = $pdo->query("SELECT * FROM users ORDER BY id DESC LIMIT 6");
+    $recentUsers = $stmt->fetchAll();
+} catch (Exception $e) {}
+
+// Fetch courses summary
+$recentCourses = [];
+try {
+    $stmt = $pdo->query("SELECT c.*, (SELECT COUNT(*) FROM videos v WHERE v.course_id = c.id) AS video_count 
+                         FROM courses c ORDER BY c.id DESC LIMIT 4");
+    $recentCourses = $stmt->fetchAll();
+} catch (Exception $e) {}
 ?>
 
-<!-- MAIN BODY -->
-<main class="ml-64 flex-1 p-8 min-h-screen">
+<!-- MAIN CONTENT WRAPPER -->
+<div class="flex-1 flex flex-col min-w-0 bg-slate-50 min-h-screen">
+    <?php require_once __DIR__ . '/includes/navbar.php'; ?>
 
-    <!-- Top Bar -->
-    <header class="flex items-center justify-between pb-6 border-b border-[#1F2937] mb-8">
-        <div>
-            <h2 class="text-2xl font-bold text-white tracking-tight" 
-                x-text="currentTab === 'dashboard' ? 'Overview & Analytics' : currentTab === 'courses' ? 'Courses & Batches' : currentTab === 'videos' ? 'Dailymotion Private Lessons' : 'Enrolled Students'">
-            </h2>
-            <p class="text-xs text-slate-400 mt-1">Manage private streams, native mobile app feeds and users</p>
-        </div>
-        <div class="flex items-center gap-3">
-            <button @click="refreshAll()" class="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition" title="Refresh Data">
-                <i data-lucide="rotate-cw" class="w-4 h-4" :class="loading ? 'animate-spin' : ''"></i>
-            </button>
-            <button @click="openModal('course')" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition">
-                <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                <span>New Course</span>
-            </button>
-            <button @click="openModal('video')" class="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition">
-                <i data-lucide="video" class="w-4 h-4"></i>
-                <span>Add Video</span>
-            </button>
-        </div>
-    </header>
-
-    <!-- TAB: DASHBOARD -->
-    <section x-show="currentTab === 'dashboard'" class="space-y-8">
-        <!-- 4 Stat Cards rendered with instant PHP server fallback -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
-            <div class="bg-[#111827] border border-[#1F2937] p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/50 transition">
+    <main class="p-6 md:p-8 space-y-8 max-w-7xl">
+        <!-- 4 Stat Metric Cards (Light Theme) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <!-- Card 1: Courses -->
+            <a href="/admin/courses/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300 transition group block">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Registered Students</span>
-                    <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Courses</span>
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition">
+                        <i data-lucide="book-open" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span class="text-3xl font-extrabold text-slate-900"><?= $serverStats['courses'] ?></span>
+                    <span class="text-xs font-semibold text-indigo-600 flex items-center gap-0.5">
+                        Manage <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                    </span>
+                </div>
+            </a>
+
+            <!-- Card 2: Videos -->
+            <a href="/admin/videos/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300 transition group block">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Video Lessons</span>
+                    <div class="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:scale-105 transition">
+                        <i data-lucide="video" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span class="text-3xl font-extrabold text-slate-900"><?= $serverStats['videos'] ?></span>
+                    <span class="text-xs font-semibold text-violet-600 flex items-center gap-0.5">
+                        Dailymotion <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                    </span>
+                </div>
+            </a>
+
+            <!-- Card 3: Students -->
+            <a href="/admin/users/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-emerald-300 transition group block">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Enrolled Students</span>
+                    <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition">
                         <i data-lucide="users" class="w-5 h-5"></i>
                     </div>
                 </div>
-                <p class="text-3xl font-extrabold text-white mt-4" x-text="stats.users || '<?= $serverStats['users'] ?>'"><?= $serverStats['users'] ?></p>
-                <div class="mt-2 flex items-center text-[11px] text-emerald-400 gap-1 font-medium">
-                    <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
-                    <span>Live app sync</span>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span class="text-3xl font-extrabold text-slate-900"><?= $serverStats['users'] ?></span>
+                    <span class="text-xs font-semibold text-emerald-600 flex items-center gap-0.5">
+                        Active App <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                    </span>
                 </div>
-            </div>
+            </a>
 
-            <div class="bg-[#111827] border border-[#1F2937] p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/50 transition">
+            <!-- Card 4: Status -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Batches</span>
-                    <div class="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl">
-                        <i data-lucide="book-marked" class="w-5 h-5"></i>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Private Streams</span>
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                        <i data-lucide="shield-check" class="w-5 h-5"></i>
                     </div>
                 </div>
-                <p class="text-3xl font-extrabold text-white mt-4" x-text="stats.courses || '<?= $serverStats['courses'] ?>'"><?= $serverStats['courses'] ?></p>
-                <div class="mt-2 text-[11px] text-slate-400 font-medium">All active courses</div>
-            </div>
-
-            <div class="bg-[#111827] border border-[#1F2937] p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/50 transition">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Private Lessons</span>
-                    <div class="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl">
-                        <i data-lucide="clapperboard" class="w-5 h-5"></i>
-                    </div>
+                <div class="mt-4 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-sm font-bold text-slate-800">OAuth Connected</span>
                 </div>
-                <p class="text-3xl font-extrabold text-white mt-4" x-text="stats.videos || '<?= $serverStats['videos'] ?>'"><?= $serverStats['videos'] ?></p>
-                <div class="mt-2 text-[11px] text-indigo-400 font-medium">Dailymotion Synced</div>
-            </div>
-
-            <div class="bg-[#111827] border border-[#1F2937] p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/50 transition">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Categories</span>
-                    <div class="p-2.5 bg-sky-500/10 text-sky-400 rounded-xl">
-                        <i data-lucide="tag" class="w-5 h-5"></i>
-                    </div>
-                </div>
-                <p class="text-3xl font-extrabold text-white mt-4" x-text="stats.categories || '<?= $serverStats['categories'] ?>'"><?= $serverStats['categories'] ?></p>
-                <div class="mt-2 text-[11px] text-slate-400 font-medium">HSSC, SSC & Tech</div>
+                <p class="text-[11px] text-slate-400 mt-1">UID: x2q3pq9 (Insight Classes)</p>
             </div>
         </div>
 
-        <!-- Quick Table Preview -->
-        <div class="bg-[#111827] border border-[#1F2937] rounded-2xl p-6">
-            <div class="flex items-center justify-between mb-5">
-                <h3 class="text-base font-bold text-white flex items-center gap-2">
-                    <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i> Active Courses
-                </h3>
-                <button @click="currentTab = 'courses'" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">View all courses →</button>
+        <!-- Quick Course Shortcuts Grid -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900">Featured Courses</h2>
+                    <p class="text-xs text-slate-500">Live batches visible in the student mobile application</p>
+                </div>
+                <a href="/admin/courses/" class="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                    View all (<?= $serverStats['courses'] ?>) <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                </a>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm text-slate-300">
-                    <thead class="text-xs uppercase bg-slate-800/50 text-slate-400 border-b border-slate-800">
-                        <tr>
-                            <th class="p-3">Course</th>
-                            <th class="p-3">Category</th>
-                            <th class="p-3">Price</th>
-                            <th class="p-3">Lessons</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/60">
-                        <template x-for="c in courses.slice(0, 4)" :key="c.id">
-                            <tr class="hover:bg-slate-800/30 transition">
-                                <td class="p-3 flex items-center gap-3">
-                                    <img :src="c.thumbnail || 'https://via.placeholder.com/80'" class="w-10 h-10 rounded-lg object-cover bg-slate-800">
-                                    <span class="font-semibold text-white truncate max-w-xs" x-text="c.title"></span>
-                                </td>
-                                <td class="p-3 text-xs text-slate-400" x-text="c.category_name || 'General'"></td>
-                                <td class="p-3 font-semibold text-emerald-400" x-text="c.price > 0 ? '₹' + c.price : 'Free'"></td>
-                                <td class="p-3"><span class="px-2.5 py-1 text-xs rounded-full bg-indigo-500/10 text-indigo-400 font-medium" x-text="(c.total_videos || 0) + ' Lessons'"></span></td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </section>
 
-    <!-- TAB: COURSES -->
-    <section x-show="currentTab === 'courses'" class="space-y-6">
-        <div class="flex items-center justify-between">
-            <input type="text" x-model="searchCourse" placeholder="Search courses..." 
-                   class="px-4 py-2 bg-[#111827] border border-[#1F2937] rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-72">
-            <button @click="openModal('course')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold">
-                + Add New Course
-            </button>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <template x-for="c in filteredCourses" :key="c.id">
-                <div class="bg-[#111827] border border-[#1F2937] rounded-2xl overflow-hidden group hover:border-indigo-500/50 transition flex flex-col">
-                    <div class="h-44 w-full relative overflow-hidden bg-slate-900">
-                        <img :src="c.thumbnail || 'https://via.placeholder.com/400'" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
-                        <span class="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-sky-400 text-[11px] font-bold px-2.5 py-1 rounded-md" x-text="c.category_name || 'Course'"></span>
-                        <span class="absolute bottom-3 right-3 bg-indigo-600 text-white text-xs font-bold px-2.5 py-1 rounded-md" x-text="c.price > 0 ? '₹' + c.price : 'FREE'"></span>
-                    </div>
-                    <div class="p-5 flex-1 flex flex-col justify-between">
-                        <div>
-                            <h4 class="font-bold text-white text-base leading-snug line-clamp-2" x-text="c.title"></h4>
-                            <p class="text-xs text-slate-400 mt-2 line-clamp-2" x-text="c.description || 'No description provided.'"></p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <?php if (empty($recentCourses)): ?>
+                    <p class="text-xs text-slate-400 col-span-4 py-4 text-center">No courses created yet.</p>
+                <?php else: ?>
+                    <?php foreach ($recentCourses as $c): ?>
+                        <div class="border border-slate-200/70 rounded-xl p-4 hover:border-indigo-300 transition bg-slate-50/50">
+                            <div class="flex items-center gap-3">
+                                <?php if (!empty($c['thumbnail'])): ?>
+                                    <img src="<?= htmlspecialchars($c['thumbnail']) ?>" class="w-12 h-12 rounded-lg object-cover border border-slate-200" alt="">
+                                <?php else: ?>
+                                    <div class="w-12 h-12 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm">
+                                        <i data-lucide="book" class="w-6 h-6"></i>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="truncate flex-1">
+                                    <h3 class="text-sm font-bold text-slate-800 truncate"><?= htmlspecialchars($c['title']) ?></h3>
+                                    <p class="text-xs text-slate-500 font-medium"><?= $c['video_count'] ?> Lessons</p>
+                                </div>
+                            </div>
+                            <div class="mt-3 flex items-center justify-between text-xs pt-3 border-t border-slate-200/60">
+                                <span class="font-bold text-emerald-600">
+                                    <?= ($c['price'] ?? 0) > 0 ? '₹' . number_format($c['price'], 2) : 'Free Access' ?>
+                                </span>
+                                <a href="/admin/videos/?course_id=<?= $c['id'] ?>" class="text-indigo-600 hover:text-indigo-700 font-semibold text-[11px]">
+                                    Videos &rarr;
+                                </a>
+                            </div>
                         </div>
-                        <div class="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between">
-                            <span class="text-xs text-indigo-400 font-semibold" x-text="(c.total_videos || 0) + ' Lessons'"></span>
-                            <button @click="deleteCourse(c.id)" class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </template>
-        </div>
-    </section>
-
-    <!-- TAB: VIDEOS -->
-    <section x-show="currentTab === 'videos'" class="space-y-6">
-        <div class="flex items-center justify-between">
-            <p class="text-xs text-slate-400">Total <span class="text-white font-semibold" x-text="videos.length"></span> private video lessons synchronized</p>
-            <button @click="openModal('video')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold">
-                + Add Dailymotion Video
-            </button>
-        </div>
-
-        <div class="bg-[#111827] border border-[#1F2937] rounded-2xl overflow-hidden">
-            <table class="w-full text-left text-sm text-slate-300">
-                <thead class="text-xs uppercase bg-slate-800/50 text-slate-400 border-b border-slate-800">
-                    <tr>
-                        <th class="p-4">#</th>
-                        <th class="p-4">Title</th>
-                        <th class="p-4">Course</th>
-                        <th class="p-4">Dailymotion ID</th>
-                        <th class="p-4">Duration</th>
-                        <th class="p-4">Access</th>
-                        <th class="p-4 text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-800/60">
-                    <template x-for="(v, idx) in videos" :key="v.id">
-                        <tr class="hover:bg-slate-800/30 transition">
-                            <td class="p-4 text-slate-500 font-mono text-xs" x-text="idx + 1"></td>
-                            <td class="p-4 font-semibold text-white" x-text="v.title"></td>
-                            <td class="p-4 text-xs text-slate-400" x-text="v.course_name"></td>
-                            <td class="p-4">
-                                <span class="px-2.5 py-1 text-xs rounded-lg bg-sky-500/10 text-sky-400 font-mono font-medium" x-text="v.dailymotion_id"></span>
-                            </td>
-                            <td class="p-4 font-mono text-xs text-emerald-400 font-bold" x-text="v.duration"></td>
-                            <td class="p-4">
-                                <span :class="v.is_free_preview == 1 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'"
-                                      class="px-2 py-0.5 rounded text-[11px] font-semibold"
-                                      x-text="v.is_free_preview == 1 ? 'Free Demo' : 'Locked'"></span>
-                            </td>
-                            <td class="p-4 text-right">
-                                <button @click="deleteVideo(v.id)" class="p-1.5 hover:bg-rose-500/20 text-rose-400 rounded-lg transition" title="Delete">
-                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- TAB: USERS -->
-    <section x-show="currentTab === 'users'" class="space-y-6">
-        <div class="bg-[#111827] border border-[#1F2937] rounded-2xl overflow-hidden p-6">
-            <div class="flex items-center justify-between mb-5">
-                <h3 class="text-base font-bold text-white">Registered App Students</h3>
-                <button @click="loadUsers()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold">
-                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh List
-                </button>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm text-slate-300">
-                    <thead class="text-xs uppercase bg-slate-800/50 text-slate-400 border-b border-slate-800">
-                        <tr>
-                            <th class="p-3">Student Name</th>
-                            <th class="p-3">Email</th>
-                            <th class="p-3">Phone</th>
-                            <th class="p-3">Registration Date</th>
-                            <th class="p-3 text-right">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/60">
-                        <template x-for="u in users" :key="u.id">
-                            <tr class="hover:bg-slate-800/30 transition">
-                                <td class="p-3 flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-full bg-indigo-600/20 text-indigo-400 font-bold flex items-center justify-center text-xs"
-                                         x-text="u.name ? u.name.charAt(0).toUpperCase() : 'S'"></div>
-                                    <span class="font-semibold text-white" x-text="u.name"></span>
-                                </td>
-                                <td class="p-3 text-xs text-indigo-300 font-mono" x-text="u.email"></td>
-                                <td class="p-3 text-xs text-slate-400" x-text="u.phone || 'N/A'"></td>
-                                <td class="p-3 text-xs text-slate-500" x-text="u.created_at"></td>
-                                <td class="p-3 text-right">
-                                    <button @click="deleteUser(u.id)" class="text-rose-400 hover:text-rose-300 p-1.5">
-                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                    </button>
-                                </td>
+        </div>
+
+        <!-- 2 Column Section: Recent Videos & Recent Students -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left 2 Cols: Recent Videos -->
+            <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+                <div class="flex items-center justify-between mb-5">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900">Recently Added Video Lessons</h2>
+                        <p class="text-xs text-slate-500">Dailymotion private videos synced for playback</p>
+                    </div>
+                    <a href="/admin/videos/" class="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                        View All <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </a>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                                <th class="pb-3">Lesson</th>
+                                <th class="pb-3">Course</th>
+                                <th class="pb-3">Duration</th>
+                                <th class="pb-3">Type</th>
+                                <th class="pb-3 text-right">Action</th>
                             </tr>
-                        </template>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 font-medium">
+                            <?php if (empty($recentVideos)): ?>
+                                <tr>
+                                    <td colspan="5" class="py-6 text-center text-slate-400">No video lessons found.</td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($recentVideos as $v): ?>
+                                    <tr class="hover:bg-slate-50/70 transition">
+                                        <td class="py-3 pr-4">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-10 h-7 rounded bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 text-slate-500">
+                                                    <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                                                </div>
+                                                <div class="truncate max-w-[200px]">
+                                                    <p class="font-bold text-slate-800 truncate"><?= htmlspecialchars($v['title']) ?></p>
+                                                    <span class="text-[10px] text-slate-400 font-mono">ID: <?= htmlspecialchars($v['dailymotion_id']) ?></span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="py-3 pr-4 text-slate-600 truncate max-w-[140px]">
+                                            <?= htmlspecialchars($v['course_title'] ?? 'General') ?>
+                                        </td>
+                                        <td class="py-3 pr-4">
+                                            <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px]">
+                                                <?= htmlspecialchars($v['duration']) ?>
+                                            </span>
+                                        </td>
+                                        <td class="py-3 pr-4">
+                                            <?php if ($v['is_free_preview']): ?>
+                                                <span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">Free</span>
+                                            <?php else: ?>
+                                                <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">Locked</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="py-3 text-right">
+                                            <a href="/admin/videos/?edit=<?= $v['id'] ?>" class="text-indigo-600 hover:text-indigo-800 font-semibold">Edit</a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right 1 Col: Recent Enrolled Students -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+                <div class="flex items-center justify-between mb-5">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900">Enrolled Students</h2>
+                        <p class="text-xs text-slate-500">App registrations</p>
+                    </div>
+                    <a href="/admin/users/" class="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                        View All <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </a>
+                </div>
+
+                <div class="space-y-4">
+                    <?php if (empty($recentUsers)): ?>
+                        <p class="text-xs text-slate-400 py-4 text-center">No registered students yet.</p>
+                    <?php else: ?>
+                        <?php foreach ($recentUsers as $u): ?>
+                            <div class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition border border-transparent hover:border-slate-200">
+                                <div class="w-9 h-9 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                                    <?= substr($u['name'] ?? 'U', 0, 1) ?>
+                                </div>
+                                <div class="truncate flex-1">
+                                    <p class="text-xs font-bold text-slate-800 truncate"><?= htmlspecialchars($u['name']) ?></p>
+                                    <p class="text-[11px] text-slate-400 truncate"><?= htmlspecialchars($u['email']) ?></p>
+                                </div>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-semibold border border-emerald-200">
+                                    Active
+                                </span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-100">
+                    <a href="/admin/users/" class="w-full py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold text-center block transition border border-slate-200">
+                        Manage All Students &rarr;
+                    </a>
+                </div>
             </div>
         </div>
-    </section>
-
-</main>
-
-<!-- MODAL: CREATE COURSE -->
-<div x-show="showCourseModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" x-transition>
-    <div class="bg-[#111827] border border-[#1F2937] rounded-2xl w-full max-w-lg p-6 shadow-2xl relative" @click.away="showCourseModal = false">
-        <h3 class="text-lg font-bold text-white mb-4">Create New Course / Batch</h3>
-        <form @submit.prevent="saveCourse()">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 mb-1">Course Title *</label>
-                    <input type="text" x-model="formCourse.title" required placeholder="e.g. HSSC CET Super Batch 2026"
-                           class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 mb-1">Category</label>
-                    <select x-model="formCourse.category_id" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
-                        <template x-for="cat in categories" :key="cat.id">
-                            <option :value="cat.id" x-text="cat.title"></option>
-                        </template>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 mb-1">Price (₹)</label>
-                    <input type="number" step="0.01" x-model="formCourse.price" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 mb-1">Cover Thumbnail URL</label>
-                    <input type="url" x-model="formCourse.thumbnail" placeholder="https://images.unsplash.com/..." class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 mb-1">Description</label>
-                    <textarea x-model="formCourse.description" rows="3" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
-                </div>
-            </div>
-            <div class="mt-6 flex items-center justify-end gap-3">
-                <button type="button" @click="showCourseModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700">Cancel</button>
-                <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/30">Save Course</button>
-            </div>
-        </form>
-    </div>
+    </main>
 </div>
-
-<!-- MODAL: ADD VIDEO (WITH AUTO DURATION) -->
-<div x-show="showVideoModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" x-transition>
-    <div class="bg-[#111827] border border-[#1F2937] rounded-2xl w-full max-w-lg p-6 shadow-2xl relative" @click.away="showVideoModal = false">
-        <h3 class="text-lg font-bold text-white mb-4">Add Private Video Lesson</h3>
-        <form @submit.prevent="saveVideo()">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 mb-1">Select Course *</label>
-                    <select x-model="formVideo.course_id" required class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
-                        <template x-for="c in courses" :key="c.id">
-                            <option :value="c.id" x-text="c.title"></option>
-                        </template>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-indigo-400 mb-1">Dailymotion ID or Share Link *</label>
-                    <div class="flex gap-2">
-                        <input type="text" x-model="formVideo.dailymotion_id" @blur="autoFetchDailymotion()" required placeholder="e.g. x992mce or https://dai.ly/..."
-                               class="flex-1 px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 font-mono">
-                        <button type="button" @click="autoFetchDailymotion()" class="px-3 py-2 bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold hover:bg-indigo-600 hover:text-white transition">
-                            Auto Fetch
-                        </button>
-                    </div>
-                    <p class="text-[11px] text-slate-500 mt-1" x-text="fetchStatus || 'Tip: Title and duration will auto-fill from Dailymotion'"></p>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 mb-1">Lesson Title *</label>
-                    <input type="text" x-model="formVideo.title" required placeholder="Lesson title"
-                           class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-semibold text-emerald-400 mb-1">Duration (Auto)</label>
-                        <input type="text" x-model="formVideo.duration" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm font-mono text-emerald-400 font-bold focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-400 mb-1">Sort Order</label>
-                        <input type="number" x-model="formVideo.sort_order" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none">
-                    </div>
-                </div>
-                <label class="flex items-center gap-2 cursor-pointer mt-2">
-                    <input type="checkbox" x-model="formVideo.is_free_preview" class="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700">
-                    <span class="text-xs text-slate-300">Allow free preview demo</span>
-                </label>
-            </div>
-            <div class="mt-6 flex items-center justify-end gap-3">
-                <button type="button" @click="showVideoModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700">Cancel</button>
-                <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-600/30">Save Video</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<script>
-    function adminPortal() {
-        return {
-            currentTab: 'dashboard',
-            loading: false,
-            stats: { 
-                courses: <?= $serverStats['courses'] ?>, 
-                videos: <?= $serverStats['videos'] ?>, 
-                categories: <?= $serverStats['categories'] ?>, 
-                users: <?= $serverStats['users'] ?> 
-            },
-            courses: [],
-            categories: [],
-            videos: [],
-            users: [],
-            searchCourse: '',
-            showCourseModal: false,
-            showVideoModal: false,
-            fetchStatus: '',
-            formCourse: { id: 0, title: '', category_id: 1, price: 0, thumbnail: '', description: '' },
-            formVideo: { id: 0, course_id: 1, title: '', dailymotion_id: '', duration: '00:00', sort_order: 1, is_free_preview: false },
-
-            async init() {
-                if (!localStorage.getItem('admin_token')) {
-                    window.location.href = './login/';
-                    return;
-                }
-                await this.refreshAll();
-                lucide.createIcons();
-            },
-
-            get filteredCourses() {
-                if (!this.searchCourse) return this.courses;
-                return this.courses.filter(c => c.title.toLowerCase().includes(this.searchCourse.toLowerCase()));
-            },
-
-            async refreshAll() {
-                this.loading = true;
-                await Promise.all([this.loadStats(), this.loadCourses(), this.loadCategories(), this.loadUsers()]);
-                await this.loadAllVideos();
-                this.loading = false;
-                this.$nextTick(() => lucide.createIcons());
-            },
-
-            async loadStats() {
-                try {
-                    const res = await fetch('../api/admin_crud.php?action=stats');
-                    const d = await res.json();
-                    if (d.status) this.stats = d.data;
-                } catch(e) {}
-            },
-
-            async loadCategories() {
-                try {
-                    const res = await fetch('../api/courses.php?action=categories');
-                    const d = await res.json();
-                    if (d.status) this.categories = d.data;
-                } catch(e) {}
-            },
-
-            async loadCourses() {
-                try {
-                    const res = await fetch('../api/courses.php?action=list');
-                    const d = await res.json();
-                    if (d.status) this.courses = d.data;
-                } catch(e) {}
-            },
-
-            async loadAllVideos() {
-                let list = [];
-                for (const c of this.courses) {
-                    try {
-                        const res = await fetch(`../api/courses.php?action=detail&id=${c.id}`);
-                        const d = await res.json();
-                        if (d.status && d.data.videos) {
-                            list = list.concat(d.data.videos.map(v => ({ ...v, course_name: c.title })));
-                        }
-                    } catch(e) {}
-                }
-                this.videos = list;
-                this.stats.videos = list.length;
-            },
-
-            async loadUsers() {
-                try {
-                    const res = await fetch('../api/admin_crud.php?action=list_users');
-                    const d = await res.json();
-                    if (d.status) this.users = d.data;
-                } catch(e) {}
-            },
-
-            async autoFetchDailymotion() {
-                const id = this.formVideo.dailymotion_id.trim();
-                if (!id) return;
-                this.fetchStatus = 'Fetching duration & title from Dailymotion...';
-                try {
-                    const res = await fetch(`../api/admin_crud.php?action=fetch_dm_info&dailymotion_id=${encodeURIComponent(id)}`);
-                    const d = await res.json();
-                    if (d.status && d.data) {
-                        this.formVideo.title = d.data.title || this.formVideo.title;
-                        this.formVideo.duration = d.data.duration || '00:00';
-                        this.fetchStatus = `✅ Synced: ${d.data.title} (${d.data.duration})`;
-                        this.toast(`Duration auto-calculated: ${d.data.duration}`, 'success');
-                    } else {
-                        this.fetchStatus = 'Could not fetch automatically. Please enter manually.';
-                    }
-                } catch(e) {
-                    this.fetchStatus = 'Error connecting to Dailymotion API';
-                }
-            },
-
-            openModal(type) {
-                if (type === 'course') {
-                    this.formCourse = { id: 0, title: '', category_id: this.categories[0]?.id || 1, price: 0, thumbnail: '', description: '' };
-                    this.showCourseModal = true;
-                } else {
-                    this.formVideo = { id: 0, course_id: this.courses[0]?.id || 1, title: '', dailymotion_id: '', duration: '00:00', sort_order: 1, is_free_preview: false };
-                    this.fetchStatus = '';
-                    this.showVideoModal = true;
-                }
-            },
-
-            async saveCourse() {
-                try {
-                    const res = await fetch('../api/admin_crud.php?action=save_course', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.formCourse)
-                    });
-                    const d = await res.json();
-                    if (d.status) {
-                        this.toast(d.message, 'success');
-                        this.showCourseModal = false;
-                        this.refreshAll();
-                    } else { this.toast(d.message, 'error'); }
-                } catch(e) { this.toast('Server error', 'error'); }
-            },
-
-            async saveVideo() {
-                try {
-                    const res = await fetch('../api/admin_crud.php?action=save_video', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.formVideo)
-                    });
-                    const d = await res.json();
-                    if (d.status) {
-                        this.toast(d.message, 'success');
-                        this.showVideoModal = false;
-                        this.refreshAll();
-                    } else { this.toast(d.message, 'error'); }
-                } catch(e) { this.toast('Server error', 'error'); }
-            },
-
-            async deleteCourse(id) {
-                if (!confirm('Are you sure you want to delete this course and its videos?')) return;
-                const res = await fetch('../api/admin_crud.php?action=delete_course', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id })
-                });
-                const d = await res.json();
-                if (d.status) { this.toast(d.message, 'success'); this.refreshAll(); }
-            },
-
-            async deleteVideo(id) {
-                if (!confirm('Are you sure you want to delete this lesson?')) return;
-                const res = await fetch('../api/admin_crud.php?action=delete_video', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id })
-                });
-                const d = await res.json();
-                if (d.status) { this.toast(d.message, 'success'); this.refreshAll(); }
-            },
-
-            async deleteUser(id) {
-                if (!confirm('Are you sure you want to delete this student account?')) return;
-                const res = await fetch('../api/admin_crud.php?action=delete_user', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id })
-                });
-                const d = await res.json();
-                if (d.status) { this.toast(d.message, 'success'); this.loadUsers(); }
-            },
-
-            toast(text, type = 'success') {
-                Toastify({
-                    text: text, duration: 3000, gravity: "top", position: "right",
-                    style: {
-                        background: type === 'success' ? '#059669' : '#DC2626',
-                        borderRadius: '12px',
-                        fontWeight: '600'
-                    }
-                }).showToast();
-            },
-
-            logout() {
-                localStorage.removeItem('admin_token');
-                window.location.href = './login/';
-            }
-        }
-    }
-</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
