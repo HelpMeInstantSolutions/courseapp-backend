@@ -3,71 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CourseApp Admin Panel | courseapp.mybhiwani.in</title>
-    <!-- Bootstrap 5 CSS -->
+    <title>CourseApp Admin Dashboard | courseapp.mybhiwani.in</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <!-- Toastify CSS for premium toasts -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <style>
-        :root {
-            --bs-primary: #4338ca;
-            --bs-primary-rgb: 67, 56, 202;
-            --sidebar-width: 260px;
-        }
-        body {
-            background-color: #f8fafc;
-            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        }
-        .sidebar {
-            width: var(--sidebar-width);
-            height: 100vh;
-            position: fixed;
-            top: 0;
-            left: 0;
-            background: #0f172a;
-            color: #f1f5f9;
-            z-index: 1000;
-            transition: all 0.3s;
-        }
-        .main-content {
-            margin-left: var(--sidebar-width);
-            padding: 24px;
-            min-height: 100vh;
-        }
-        .nav-link {
-            color: #94a3b8;
-            border-radius: 8px;
-            padding: 10px 16px;
-            margin: 4px 12px;
-            font-weight: 500;
-        }
-        .nav-link:hover, .nav-link.active {
-            color: #ffffff;
-            background: #1e293b;
-        }
-        .nav-link.active {
-            background: #4338ca;
-        }
-        .card {
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
-        }
-        .stat-card {
-            transition: transform 0.2s;
-        }
-        .stat-card:hover {
-            transform: translateY(-3px);
-        }
-        .badge-dm {
-            background: #0066dc;
-            color: white;
-        }
+        :root { --sidebar-width: 260px; }
+        body { background-color: #f8fafc; font-family: system-ui, sans-serif; }
+        .sidebar { width: var(--sidebar-width); height: 100vh; position: fixed; top: 0; left: 0; background: #0f172a; color: #f1f5f9; z-index: 1000; }
+        .main-content { margin-left: var(--sidebar-width); padding: 24px; min-height: 100vh; }
+        .nav-link { color: #94a3b8; border-radius: 8px; padding: 10px 16px; margin: 4px 12px; font-weight: 500; text-decoration: none; display: block; }
+        .nav-link:hover, .nav-link.active { color: #ffffff; background: #1e293b; }
+        .nav-link.active { background: #4338ca; }
+        .card { border: 1px solid #e2e8f0; border-radius: 12px; }
+        .stat-card { transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-3px); }
     </style>
 </head>
 <body>
+    <script>
+        if (!localStorage.getItem('admin_token')) window.location.href = './login/';
+    </script>
 
     <!-- Sidebar -->
     <div class="sidebar d-flex flex-column p-3">
@@ -79,525 +35,137 @@
             </div>
         </div>
         <hr class="text-secondary my-2">
-        <ul class="nav nav-pills flex-column mb-auto">
-            <li class="nav-item">
-                <a href="#" class="nav-link active" onclick="switchTab('dashboard')">
-                    <i class="bi bi-grid-fill me-2"></i> Dashboard
-                </a>
-            </li>
-            <li>
-                <a href="#" class="nav-link" onclick="switchTab('courses')">
-                    <i class="bi bi-collection-play-fill me-2"></i> Manage Courses
-                </a>
-            </li>
-            <li>
-                <a href="#" class="nav-link" onclick="switchTab('videos')">
-                    <i class="bi bi-film me-2"></i> Dailymotion Lessons
-                </a>
-            </li>
+        <ul class="nav flex-column mb-auto">
+            <li><a href="./" class="nav-link active"><i class="bi bi-grid-fill me-2"></i> Dashboard</a></li>
+            <li><a href="./courses/" class="nav-link"><i class="bi bi-collection-play-fill me-2"></i> Manage Courses</a></li>
+            <li><a href="./videos/" class="nav-link"><i class="bi bi-film me-2"></i> Dailymotion Lessons</a></li>
         </ul>
         <hr class="text-secondary">
         <div class="px-2">
-            <button class="btn btn-outline-danger w-100 btn-sm" onclick="showToast('Admin Session Active', 'info')">
-                <i class="bi bi-shield-check me-1"></i> Admin Connected
+            <button class="btn btn-outline-danger w-100 btn-sm" onclick="logoutAdmin()">
+                <i class="bi bi-box-arrow-right me-1"></i> Logout
             </button>
         </div>
     </div>
 
     <!-- Main Content -->
     <div class="main-content">
-        <!-- Top Nav -->
         <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-3 shadow-sm border">
             <div>
-                <h4 class="mb-0 fw-bold" id="pageTitle">Dashboard Overview</h4>
-                <small class="text-muted">Manage your Kotlin Native app courses & private video streams</small>
+                <h4 class="mb-0 fw-bold">Dashboard Overview</h4>
+                <small class="text-muted">Welcome, Super Admin</small>
             </div>
             <div class="d-flex gap-2">
-                <button class="btn btn-primary" onclick="openNewCourseModal()">
-                    <i class="bi bi-plus-circle me-1"></i> Add Course
-                </button>
-                <button class="btn btn-success" onclick="openNewVideoModal()">
-                    <i class="bi bi-cloud-arrow-up me-1"></i> Add Dailymotion Video
-                </button>
+                <a href="./courses/" class="btn btn-primary"><i class="bi bi-collection-play me-1"></i> View Courses</a>
+                <a href="./videos/" class="btn btn-success"><i class="bi bi-film me-1"></i> View Lessons</a>
             </div>
         </div>
 
-        <!-- TAB: DASHBOARD -->
-        <div id="tab-dashboard">
-            <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <div class="card stat-card p-3 bg-white">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="text-muted fw-semibold">Total Courses</span>
-                                <h2 class="fw-bold text-primary mt-1 mb-0" id="statCourses">-</h2>
-                            </div>
-                            <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
-                                <i class="bi bi-journal-album fs-3"></i>
-                            </div>
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card stat-card p-3 bg-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted fw-semibold">Total Courses</span>
+                            <h2 class="fw-bold text-primary mt-1 mb-0" id="statCourses">-</h2>
                         </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card stat-card p-3 bg-white">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="text-muted fw-semibold">Dailymotion Lessons</span>
-                                <h2 class="fw-bold text-success mt-1 mb-0" id="statVideos">-</h2>
-                            </div>
-                            <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
-                                <i class="bi bi-camera-reels fs-3"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card stat-card p-3 bg-white">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="text-muted fw-semibold">Categories</span>
-                                <h2 class="fw-bold text-warning mt-1 mb-0" id="statCategories">-</h2>
-                            </div>
-                            <div class="bg-warning bg-opacity-10 p-3 rounded-circle text-warning">
-                                <i class="bi bi-tags fs-3"></i>
-                            </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded-circle text-primary">
+                            <i class="bi bi-journal-album fs-3"></i>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <!-- Recent Courses Table -->
-            <div class="card bg-white p-3 mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">Active Courses</h5>
-                    <button class="btn btn-sm btn-outline-primary" onclick="loadCourses()">Refresh</button>
+            <div class="col-md-4">
+                <div class="card stat-card p-3 bg-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted fw-semibold">Dailymotion Lessons</span>
+                            <h2 class="fw-bold text-success mt-1 mb-0" id="statVideos">-</h2>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
+                            <i class="bi bi-camera-reels fs-3"></i>
+                        </div>
+                    </div>
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>#</th>
-                                <th>Thumbnail</th>
-                                <th>Title & Category</th>
-                                <th>Price</th>
-                                <th>Total Lessons</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="coursesTableBody">
-                            <tr><td colspan="6" class="text-center py-4">Loading courses...</td></tr>
-                        </tbody>
-                    </table>
+            </div>
+            <div class="col-md-4">
+                <div class="card stat-card p-3 bg-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="text-muted fw-semibold">Categories</span>
+                            <h2 class="fw-bold text-warning mt-1 mb-0" id="statCategories">-</h2>
+                        </div>
+                        <div class="bg-warning bg-opacity-10 p-3 rounded-circle text-warning">
+                            <i class="bi bi-tags fs-3"></i>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- TAB: COURSES -->
-        <div id="tab-courses" style="display:none;">
-            <div class="card bg-white p-3">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">All Courses</h5>
-                    <button class="btn btn-primary btn-sm" onclick="openNewCourseModal()">+ Create Course</button>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>ID</th>
-                                <th>Cover</th>
-                                <th>Title</th>
-                                <th>Category</th>
-                                <th>Price</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="allCoursesTableBody"></tbody>
-                    </table>
-                </div>
+        <div class="card bg-white p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0">Active Batches & Courses</h5>
+                <a href="./courses/" class="btn btn-sm btn-outline-primary">Manage All →</a>
             </div>
-        </div>
-
-        <!-- TAB: VIDEOS -->
-        <div id="tab-videos" style="display:none;">
-            <div class="card bg-white p-3">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">Dailymotion Video Lessons</h5>
-                    <button class="btn btn-success btn-sm" onclick="openNewVideoModal()">+ Add New Lesson</button>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>ID</th>
-                                <th>Lesson Title</th>
-                                <th>Course</th>
-                                <th>Dailymotion ID</th>
-                                <th>Duration</th>
-                                <th>Preview</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="videosTableBody"></tbody>
-                    </table>
-                </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Thumbnail</th>
+                            <th>Course Title</th>
+                            <th>Price</th>
+                            <th>Lessons Count</th>
+                        </tr>
+                    </thead>
+                    <tbody id="overviewTableBody">
+                        <tr><td colspan="5" class="text-center py-4">Loading stats...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Add/Edit Course -->
-    <div class="modal fade" id="courseModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form id="courseForm" onsubmit="handleSaveCourse(event)">
-                    <div class="modal-header">
-                        <h5 class="modal-title fw-bold" id="courseModalTitle">Add Course</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <input type="hidden" id="courseId" value="0">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Course Title *</label>
-                            <input type="text" class="form-control" id="courseTitle" required placeholder="e.g. HSSC CET 2026 Special Batch">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Category</label>
-                            <select class="form-select" id="courseCategory"></select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Price (₹)</label>
-                            <input type="number" step="0.01" class="form-control" id="coursePrice" value="0.00">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Thumbnail URL</label>
-                            <input type="url" class="form-control" id="courseThumbnail" placeholder="https://...">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Description</label>
-                            <textarea class="form-control" id="courseDesc" rows="3"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Course</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Add/Edit Video -->
-    <div class="modal fade" id="videoModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <form id="videoForm" onsubmit="handleSaveVideo(event)">
-                    <div class="modal-header">
-                        <h5 class="modal-title fw-bold" id="videoModalTitle">Add Dailymotion Lesson</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <input type="hidden" id="videoId" value="0">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Select Course *</label>
-                            <select class="form-select" id="videoCourseId" required></select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Lesson Title *</label>
-                            <input type="text" class="form-control" id="videoTitle" required placeholder="e.g. Lecture 01: Introduction">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Dailymotion Video ID / URL *</label>
-                            <input type="text" class="form-control" id="videoDmId" required placeholder="e.g. x8q3pq9 or https://dailymotion.com/video/x8q3pq9">
-                            <small class="text-muted">Enter the private video ID or direct link from your partner portal.</small>
-                        </div>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label fw-semibold">Duration</label>
-                                <input type="text" class="form-control" id="videoDuration" value="20:00" placeholder="MM:SS">
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label fw-semibold">Sort Order</label>
-                                <input type="number" class="form-control" id="videoSortOrder" value="1">
-                            </div>
-                        </div>
-                        <div class="form-check form-switch mb-2">
-                            <input class="form-check-input" type="checkbox" id="videoIsPreview">
-                            <label class="form-check-label" for="videoIsPreview">Allow Free Demo Preview</label>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-success">Save Lesson</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bootstrap 5 JS & Toastify -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-
     <script>
         const API_BASE = '../api';
-        let cachedCourses = [];
-        let cachedCategories = [];
 
-        function showToast(text, type = 'success') {
-            const colors = {
-                success: "linear-gradient(to right, #00b09b, #96c93d)",
-                error: "linear-gradient(to right, #ff5f6d, #ffc371)",
-                info: "linear-gradient(to right, #2193b0, #6dd5ed)"
-            };
-            Toastify({
-                text: text,
-                duration: 3500,
-                gravity: "top",
-                position: "right",
-                style: { background: colors[type] || colors.info, borderRadius: "8px", fontWeight: "600" }
-            }).showToast();
+        function logoutAdmin() {
+            localStorage.removeItem('admin_token');
+            window.location.href = './login/';
         }
 
-        function switchTab(tab) {
-            document.getElementById('tab-dashboard').style.display = (tab === 'dashboard') ? 'block' : 'none';
-            document.getElementById('tab-courses').style.display = (tab === 'courses') ? 'block' : 'none';
-            document.getElementById('tab-videos').style.display = (tab === 'videos') ? 'block' : 'none';
-            document.getElementById('pageTitle').innerText = tab.charAt(0).toUpperCase() + tab.slice(1);
-            if (tab === 'courses') loadCourses();
-            if (tab === 'videos') loadAllVideos();
-        }
-
-        async function loadStats() {
+        async function init() {
             try {
-                const res = await fetch(`${API_BASE}/admin_crud.php?action=stats`);
-                const data = await res.json();
-                if (data.status) {
-                    document.getElementById('statCourses').innerText = data.data.courses;
-                    document.getElementById('statVideos').innerText = data.data.videos;
-                    document.getElementById('statCategories').innerText = data.data.categories;
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        }
-
-        async function loadCategories() {
-            try {
-                const res = await fetch(`${API_BASE}/courses.php?action=categories`);
-                const data = await res.json();
-                if (data.status) {
-                    cachedCategories = data.data;
-                    const select = document.getElementById('courseCategory');
-                    select.innerHTML = cachedCategories.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
-                }
-            } catch (e) { console.error(e); }
-        }
-
-        async function loadCourses() {
-            try {
-                const res = await fetch(`${API_BASE}/courses.php?action=list`);
-                const data = await res.json();
-                if (data.status) {
-                    cachedCourses = data.data;
-                    renderCoursesTables(cachedCourses);
-                    updateVideoCourseSelect(cachedCourses);
-                }
-            } catch (e) {
-                showToast("Failed to fetch courses", "error");
-            }
-        }
-
-        function updateVideoCourseSelect(courses) {
-            const select = document.getElementById('videoCourseId');
-            select.innerHTML = courses.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
-        }
-
-        function renderCoursesTables(courses) {
-            const tbody = document.getElementById('coursesTableBody');
-            const allTbody = document.getElementById('allCoursesTableBody');
-
-            if (courses.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4">No courses created yet.</td></tr>`;
-                allTbody.innerHTML = `<tr><td colspan="6" class="text-center py-4">No courses found.</td></tr>`;
-                return;
-            }
-
-            const rows = courses.map((c, i) => `
-                <tr>
-                    <td>${i + 1}</td>
-                    <td><img src="${c.thumbnail || 'https://via.placeholder.com/80'}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;"></td>
-                    <td>
-                        <div class="fw-bold">${c.title}</div>
-                        <small class="text-muted"><i class="bi bi-tag me-1"></i>${c.category_name || 'General'}</small>
-                    </td>
-                    <td class="fw-bold text-success">${c.price > 0 ? '₹' + c.price : '<span class="badge bg-success">Free</span>'}</td>
-                    <td><span class="badge bg-primary fs-6">${c.total_videos || 0} Lessons</span></td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteCourse(${c.id})"><i class="bi bi-trash"></i></button>
-                    </td>
-                </tr>
-            `).join('');
-
-            tbody.innerHTML = rows;
-            allTbody.innerHTML = rows;
-        }
-
-        async function loadAllVideos() {
-            try {
-                const tbody = document.getElementById('videosTableBody');
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-3">Loading lessons...</td></tr>`;
-                
-                let allVids = [];
-                for (const c of cachedCourses) {
-                    const res = await fetch(`${API_BASE}/courses.php?action=detail&id=${c.id}`);
-                    const json = await res.json();
-                    if (json.status && json.data.videos) {
-                        allVids = allVids.concat(json.data.videos.map(v => ({ ...v, course_name: c.title })));
-                    }
+                const sRes = await fetch(`${API_BASE}/admin_crud.php?action=stats`);
+                const sData = await sRes.json();
+                if (sData.status) {
+                    document.getElementById('statCourses').innerText = sData.data.courses;
+                    document.getElementById('statVideos').innerText = sData.data.videos;
+                    document.getElementById('statCategories').innerText = sData.data.categories;
                 }
 
-                if (allVids.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4">No lessons added yet. Click "+ Add New Lesson" to add Dailymotion videos!</td></tr>`;
-                    return;
-                }
-
-                tbody.innerHTML = allVids.map(v => `
-                    <tr>
-                        <td>${v.id}</td>
-                        <td class="fw-bold">${v.title}</td>
-                        <td><span class="badge bg-secondary">${v.course_name}</span></td>
-                        <td><span class="badge badge-dm"><i class="bi bi-play-circle me-1"></i>${v.dailymotion_id}</span></td>
-                        <td>${v.duration}</td>
-                        <td>${v.is_free_preview == 1 ? '<span class="badge bg-success">Free Demo</span>' : '<span class="badge bg-warning text-dark">Locked</span>'}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteVideo(${v.id})"><i class="bi bi-trash"></i></button>
-                        </td>
-                    </tr>
-                `).join('');
-            } catch (e) {
-                console.error(e);
-            }
-        }
-
-        const courseModal = new bootstrap.Modal(document.getElementById('courseModal'));
-        const videoModal = new bootstrap.Modal(document.getElementById('videoModal'));
-
-        function openNewCourseModal() {
-            document.getElementById('courseForm').reset();
-            document.getElementById('courseId').value = "0";
-            courseModal.show();
-        }
-
-        function openNewVideoModal() {
-            document.getElementById('videoForm').reset();
-            document.getElementById('videoId').value = "0";
-            videoModal.show();
-        }
-
-        async function handleSaveCourse(e) {
-            e.preventDefault();
-            const payload = {
-                id: document.getElementById('courseId').value,
-                title: document.getElementById('courseTitle').value,
-                category_id: document.getElementById('courseCategory').value,
-                price: document.getElementById('coursePrice').value,
-                thumbnail: document.getElementById('courseThumbnail').value,
-                description: document.getElementById('courseDesc').value
-            };
-
-            try {
-                const res = await fetch(`${API_BASE}/admin_crud.php?action=save_course`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.status) {
-                    showToast(data.message, 'success');
-                    courseModal.hide();
-                    loadCourses();
-                    loadStats();
+                const cRes = await fetch(`${API_BASE}/courses.php?action=list`);
+                const cData = await cRes.json();
+                const tbody = document.getElementById('overviewTableBody');
+                if (cData.status && cData.data.length > 0) {
+                    tbody.innerHTML = cData.data.slice(0, 5).map((c, i) => `
+                        <tr>
+                            <td>${i + 1}</td>
+                            <td><img src="${c.thumbnail || 'https://via.placeholder.com/80'}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 6px;"></td>
+                            <td><div class="fw-bold">${c.title}</div><small class="text-muted">${c.category_name || 'General'}</small></td>
+                            <td class="fw-bold text-success">${c.price > 0 ? '₹' + c.price : '<span class="badge bg-success">Free</span>'}</td>
+                            <td><span class="badge bg-primary">${c.total_videos || 0} Lessons</span></td>
+                        </tr>
+                    `).join('');
                 } else {
-                    showToast(data.message, 'error');
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4">No courses yet.</td></tr>`;
                 }
-            } catch (err) {
-                showToast("Server error occurred", "error");
-            }
+            } catch(e) {}
         }
 
-        async function handleSaveVideo(e) {
-            e.preventDefault();
-            const payload = {
-                id: document.getElementById('videoId').value,
-                course_id: document.getElementById('videoCourseId').value,
-                title: document.getElementById('videoTitle').value,
-                dailymotion_id: document.getElementById('videoDmId').value,
-                duration: document.getElementById('videoDuration').value,
-                sort_order: document.getElementById('videoSortOrder').value,
-                is_free_preview: document.getElementById('videoIsPreview').checked ? 1 : 0
-            };
-
-            try {
-                const res = await fetch(`${API_BASE}/admin_crud.php?action=save_video`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.status) {
-                    showToast(data.message, 'success');
-                    videoModal.hide();
-                    loadStats();
-                    loadCourses();
-                    loadAllVideos();
-                } else {
-                    showToast(data.message, 'error');
-                }
-            } catch (err) {
-                showToast("Server error occurred", "error");
-            }
-        }
-
-        async function deleteCourse(id) {
-            if (!confirm("Are you sure you want to delete this course and all its videos?")) return;
-            try {
-                const res = await fetch(`${API_BASE}/admin_crud.php?action=delete_course`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id })
-                });
-                const data = await res.json();
-                if (data.status) {
-                    showToast(data.message, 'success');
-                    loadCourses();
-                    loadStats();
-                }
-            } catch (e) { showToast("Failed to delete", "error"); }
-        }
-
-        async function deleteVideo(id) {
-            if (!confirm("Are you sure you want to delete this lesson video?")) return;
-            try {
-                const res = await fetch(`${API_BASE}/admin_crud.php?action=delete_video`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id })
-                });
-                const data = await res.json();
-                if (data.status) {
-                    showToast(data.message, 'success');
-                    loadStats();
-                    loadAllVideos();
-                }
-            } catch (e) { showToast("Failed to delete", "error"); }
-        }
-
-        // Init
-        window.addEventListener('DOMContentLoaded', () => {
-            loadStats();
-            loadCategories();
-            loadCourses();
-            showToast("Admin Panel Ready", "info");
-        });
+        window.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>

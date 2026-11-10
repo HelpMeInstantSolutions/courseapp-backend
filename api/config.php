@@ -23,11 +23,9 @@ try {
         PDO::ATTR_TIMEOUT => 30
     ]);
 
-    // Enable foreign keys and WAL mode for fast concurrent reads
     $pdo->exec("PRAGMA foreign_keys = ON;");
     $pdo->exec("PRAGMA journal_mode = WAL;");
 
-    // Auto-initialize schema if new or tables missing
     initDatabase($pdo);
 
 } catch (PDOException $e) {
@@ -47,6 +45,16 @@ function initDatabase($pdo) {
             username TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL,
             name TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            phone TEXT,
+            status INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -85,12 +93,17 @@ function initDatabase($pdo) {
         );
     ");
 
-    // Check if initial admin exists, if not seed it
-    $stmt = $pdo->query("SELECT COUNT(*) FROM admins");
-    if ($stmt->fetchColumn() == 0) {
-        $pwd = password_hash('admin123', PASSWORD_BCRYPT);
+    // Ensure admin user exists with password 'admin'
+    $adminPwd = password_hash('admin', PASSWORD_BCRYPT);
+    $checkAdmin = $pdo->prepare("SELECT id FROM admins WHERE username = 'admin'");
+    $checkAdmin->execute();
+    if (!$checkAdmin->fetch()) {
         $insertAdmin = $pdo->prepare("INSERT INTO admins (username, password, name) VALUES ('admin', ?, 'Super Admin')");
-        $insertAdmin->execute([$pwd]);
+        $insertAdmin->execute([$adminPwd]);
+    } else {
+        // Update password to 'admin'
+        $upAdmin = $pdo->prepare("UPDATE admins SET password = ? WHERE username = 'admin'");
+        $upAdmin->execute([$adminPwd]);
     }
 
     // Seed default categories if empty
@@ -107,9 +120,9 @@ function initDatabase($pdo) {
             (2, 2, 'Maths & Reasoning Shortcut Masterclass', 'Shortcut tricks and previous year solved questions for all competitive exams.', 'https://images.unsplash.com/photo-1509228468518-180dd4864904?w=600&auto=format&fit=crop&q=80', 299.00);
 
             INSERT INTO videos (id, course_id, title, description, dailymotion_id, duration, sort_order, is_free_preview) VALUES
-            (1, 1, 'Lecture 01: Haryana History & Important Dynasties', 'Introduction to Ancient Haryana & Vedic Period landmarks.', 'x8q3pq9', '32:45', 1, 1),
-            (2, 1, 'Lecture 02: Haryana Geography, Rivers & Canals', 'Deep dive into Yamuna, Ghaggar and irrigation systems.', 'x2q3pq9', '28:10', 2, 0),
-            (3, 2, 'Speed Maths: 5-Second Square & Cube Root Tricks', 'Calculation speed hacks for competitive exams.', 'x8q3pq9', '18:20', 1, 1);
+            (1, 1, 'Lecture 01: Haryana History & Important Dynasties', 'Introduction to Ancient Haryana & Vedic Period landmarks.', 'x98hbpm', '32:45', 1, 1),
+            (2, 1, 'Lecture 02: Haryana Geography, Rivers & Canals', 'Deep dive into Yamuna, Ghaggar and irrigation systems.', 'x98hbpm', '28:10', 2, 0),
+            (3, 2, 'Speed Maths: 5-Second Square & Cube Root Tricks', 'Calculation speed hacks for competitive exams.', 'x98hbpm', '18:20', 1, 1);
         ");
     }
 }
