@@ -5,7 +5,7 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 header('Content-Type: application/json; charset=utf-8');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
@@ -60,22 +60,7 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
     "Origin: https://geo.dailymotion.com"
 ]);
 $metaRes = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curlErr = curl_error($ch);
 curl_close($ch);
-
-if (isset($_GET['debug'])) {
-    echo json_encode([
-        "token_exists" => !empty($token),
-        "embedUrl" => $embedUrl,
-        "tokenOrId" => $tokenOrId,
-        "metaUrl" => $metaUrl,
-        "httpCode" => $httpCode,
-        "curlErr" => $curlErr,
-        "metaRes" => json_decode($metaRes, true) ?: substr($metaRes, 0, 500)
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    exit();
-}
 
 $metaJson = json_decode($metaRes, true);
 $rawManifestUrl = null;
@@ -84,7 +69,7 @@ if (isset($metaJson['qualities']['auto'][0]['url'])) {
     $rawManifestUrl = $metaJson['qualities']['auto'][0]['url'];
 }
 
-// Fallback search in raw metadata
+// Fallback regex search in raw metadata
 if (!$rawManifestUrl && preg_match('/"url":"(https:[^"]+m3u8[^"]*)"/', $metaRes, $m)) {
     $rawManifestUrl = stripslashes($m[1]);
 }
@@ -98,56 +83,14 @@ if (!$rawManifestUrl) {
     exit();
 }
 
-// 4. Fetch the master m3u8 playlist to inspect individual quality streams
-$ch = curl_init($rawManifestUrl);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    "Referer: https://geo.dailymotion.com/",
-    "Origin: https://geo.dailymotion.com"
-]);
-$masterM3u8 = curl_exec($ch);
-$masterHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-$qualities = [];
-$bestStream = $rawManifestUrl;
-
-if ($masterHttpCode === 200 && !empty($masterM3u8)) {
-    $lines = explode("\n", $masterM3u8);
-    $currentQuality = null;
-
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (strpos($line, '#EXT-X-STREAM-INF:') === 0) {
-            if (preg_match('/NAME="([^"]+)"/', $line, $qm)) {
-                $currentQuality = $qm[1] . 'p';
-            }
-        } else if (!empty($line) && strpos($line, 'http') === 0 && $currentQuality) {
-            $qualities[$currentQuality] = $line;
-            $currentQuality = null;
-        }
-    }
-
-    if (isset($qualities['720p'])) {
-        $bestStream = $qualities['720p'];
-    } elseif (isset($qualities['480p'])) {
-        $bestStream = $qualities['480p'];
-    } elseif (!empty($qualities)) {
-        $bestStream = reset($qualities);
-    }
-}
-
 echo json_encode([
     "status" => true,
     "message" => "Raw direct HLS stream ready (Zero Watermark / Native ExoPlayer)",
     "data" => [
         "id" => $dmId,
         "title" => $videoTitle,
+        "stream_url" => $rawManifestUrl,
         "master_manifest_url" => $rawManifestUrl,
-        "stream_url" => $bestStream,
-        "qualities" => $qualities,
         "headers" => [
             "Referer" => "https://geo.dailymotion.com/",
             "Origin" => "https://geo.dailymotion.com",
