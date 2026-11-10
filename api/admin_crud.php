@@ -43,12 +43,28 @@ switch ($action) {
         $totalCourses = $pdo->query("SELECT COUNT(*) FROM courses")->fetchColumn();
         $totalVideos = $pdo->query("SELECT COUNT(*) FROM videos")->fetchColumn();
         $totalCategories = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
+        $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
 
         sendResponse(true, "Stats loaded", [
             'courses' => $totalCourses,
             'videos' => $totalVideos,
-            'categories' => $totalCategories
+            'categories' => $totalCategories,
+            'users' => $totalUsers
         ]);
+        break;
+
+    case 'list_users':
+        $stmt = $pdo->query("SELECT id, name, email, phone, status, created_at FROM users ORDER BY id DESC");
+        $users = $stmt->fetchAll();
+        sendResponse(true, "Users list retrieved", $users);
+        break;
+
+    case 'delete_user':
+        $userId = (int)($input['id'] ?? 0);
+        if ($userId <= 0) sendResponse(false, "Invalid User ID", null, 400);
+        $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        sendResponse(true, "Student account deleted successfully!");
         break;
 
     case 'save_course':
