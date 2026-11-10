@@ -19,15 +19,13 @@ if (!$video) {
     sendResponse(false, "Video not found or disabled", null, 404);
 }
 
-// Generate Dailymotion embed URL
-$dmId = $video['dailymotion_id'];
-
-// If full URL was entered, extract ID
+$cleanId = $dmId;
 if (preg_match('/(?:dailymotion\.com\/(?:video|hub)\/|dai\.ly\/)([a-zA-Z0-9]+)/', $dmId, $matches)) {
-    $dmId = $matches[1];
+    $cleanId = $matches[1];
 }
 
-$video['clean_dm_id'] = $dmId;
-$video['embed_url'] = "https://www.dailymotion.com/embed/video/" . $dmId . "?autoplay=1&mute=0&controls=1&ui-theme=dark";
+$video['clean_dm_id'] = $cleanId;
+// Modern Dailymotion Geo Player (Works seamlessly for Private/Unlisted videos)
+$video['embed_url'] = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $cleanId . "&autoplay=1&mute=0&controls=1";
 
 sendResponse(true, "Video details retrieved", $video);
