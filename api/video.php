@@ -44,7 +44,8 @@ $video['clean_dm_id'] = $cleanId;
 $token = getOwnerToken();
 
 // Query Dailymotion API directly with Owner Bearer Token to get authenticated embed URL
-$authorizedEmbedUrl = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $cleanId . "&autoplay=1&mute=0&controls=1";
+$dmParams = "autoplay=1&mute=0&controls=1&ui-logo=0&ui-watermark=0&sharing-enable=0&endscreen-enable=0&ui-start-screen-info=0&queue-enable=0";
+$authorizedEmbedUrl = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $cleanId . "&" . $dmParams;
 
 if ($token) {
     $ch = curl_init("https://api.dailymotion.com/video/" . $cleanId . "?fields=id,title,embed_url,private");
@@ -58,7 +59,7 @@ if ($token) {
     if ($res) {
         $dmJson = json_decode($res, true);
         if (isset($dmJson['embed_url']) && !empty($dmJson['embed_url'])) {
-            $authorizedEmbedUrl = $dmJson['embed_url'] . (strpos($dmJson['embed_url'], '?') !== false ? '&' : '?') . "autoplay=1&mute=0&controls=1";
+            $authorizedEmbedUrl = $dmJson['embed_url'] . (strpos($dmJson['embed_url'], '?') !== false ? '&' : '?') . $dmParams;
             $video['title'] = $dmJson['title'] ?? $video['title'];
         }
     }
