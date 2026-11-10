@@ -3,189 +3,653 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CourseApp Admin Dashboard | courseapp.mybhiwani.in</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <title>CourseApp Admin | Enterprise Portal</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81'
+                        },
+                        darkbg: '#0B0F19',
+                        darkcard: '#111827',
+                        darkborder: '#1F2937'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+    <!-- Toastify JS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <style>
-        :root { --sidebar-width: 270px; }
-        body { background-color: #f1f5f9; font-family: system-ui, -apple-system, sans-serif; }
-        .sidebar { width: var(--sidebar-width); height: 100vh; position: fixed; top: 0; left: 0; background: #0f172a; color: #f1f5f9; z-index: 1000; box-shadow: 4px 0 10px rgba(0,0,0,0.1); }
-        .main-content { margin-left: var(--sidebar-width); padding: 28px; min-height: 100vh; }
-        .nav-link { color: #94a3b8; border-radius: 10px; padding: 12px 18px; margin: 4px 12px; font-weight: 500; text-decoration: none; display: flex; align-items: center; transition: all 0.2s; }
-        .nav-link:hover, .nav-link.active { color: #ffffff; background: #1e293b; }
-        .nav-link.active { background: #4f46e5; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); }
-        .card { border: none; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-        .stat-card { transition: all 0.25s ease; border-radius: 16px; overflow: hidden; position: relative; }
-        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 12px 20px -3px rgba(0, 0, 0, 0.1); }
+        [x-cloak] { display: none !important; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0B0F19; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 9999px; }
     </style>
 </head>
-<body>
-    <script>
-        if (!localStorage.getItem('admin_token')) window.location.href = './login/';
-    </script>
+<body class="bg-[#0B0F19] text-slate-100 antialiased font-sans min-h-screen flex"
+      x-data="adminPortal()" x-init="init()" x-cloak>
 
-    <!-- Sidebar -->
-    <div class="sidebar d-flex flex-column p-3">
-        <div class="d-flex align-items-center mb-4 px-2 pt-2">
-            <div class="bg-primary p-2 rounded-3 text-white me-3 shadow">
-                <i class="bi bi-play-circle-fill fs-4"></i>
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-[#111827] border-r border-[#1F2937] flex flex-col fixed inset-y-0 z-50 transition-all duration-300">
+        <!-- Logo -->
+        <div class="h-16 flex items-center px-6 gap-3 border-b border-[#1F2937]">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 text-white font-bold">
+                <i data-lucide="play" class="w-5 h-5 fill-current"></i>
             </div>
             <div>
-                <h5 class="mb-0 text-white fw-bold">CourseApp</h5>
-                <small class="text-secondary">courseapp.mybhiwani.in</small>
+                <h1 class="font-bold text-white tracking-wide text-base">CourseApp</h1>
+                <p class="text-[11px] text-slate-400">courseapp.mybhiwani.in</p>
             </div>
         </div>
-        <hr class="text-secondary my-2">
-        <ul class="nav flex-column mb-auto">
-            <li><a href="./" class="nav-link active"><i class="bi bi-grid-fill me-3 fs-5"></i> Dashboard</a></li>
-            <li><a href="./courses/" class="nav-link"><i class="bi bi-collection-play-fill me-3 fs-5"></i> Manage Courses</a></li>
-            <li><a href="./videos/" class="nav-link"><i class="bi bi-film me-3 fs-5"></i> Dailymotion Lessons</a></li>
-            <li><a href="./users/" class="nav-link"><i class="bi bi-people-fill me-3 fs-5"></i> Students / Users</a></li>
-        </ul>
-        <hr class="text-secondary">
-        <div class="px-2">
-            <button class="btn btn-outline-danger w-100 btn-sm py-2" onclick="logoutAdmin()">
-                <i class="bi bi-box-arrow-right me-1"></i> Logout Admin
+
+        <!-- Navigation Tabs -->
+        <nav class="p-4 space-y-1.5 flex-1 overflow-y-auto">
+            <button @click="currentTab = 'dashboard'" 
+                    :class="currentTab === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400 font-semibold border-r-2 border-indigo-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
+                    class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-all duration-150 text-left">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                <span>Dashboard</span>
+            </button>
+
+            <button @click="currentTab = 'courses'" 
+                    :class="currentTab === 'courses' ? 'bg-indigo-600/10 text-indigo-400 font-semibold border-r-2 border-indigo-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
+                    class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-all duration-150 text-left">
+                <i data-lucide="book-open" class="w-4 h-4"></i>
+                <span>Manage Courses</span>
+                <span class="ml-auto text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full" x-text="stats.courses || 0"></span>
+            </button>
+
+            <button @click="currentTab = 'videos'" 
+                    :class="currentTab === 'videos' ? 'bg-indigo-600/10 text-indigo-400 font-semibold border-r-2 border-indigo-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
+                    class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-all duration-150 text-left">
+                <i data-lucide="video" class="w-4 h-4"></i>
+                <span>Video Lessons</span>
+                <span class="ml-auto text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full" x-text="stats.videos || 0"></span>
+            </button>
+
+            <button @click="currentTab = 'users'" 
+                    :class="currentTab === 'users' ? 'bg-indigo-600/10 text-indigo-400 font-semibold border-r-2 border-indigo-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
+                    class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-all duration-150 text-left">
+                <i data-lucide="users" class="w-4 h-4"></i>
+                <span>Enrolled Students</span>
+                <span class="ml-auto text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full" x-text="stats.users || 0"></span>
+            </button>
+        </nav>
+
+        <!-- Admin Profile & Logout -->
+        <div class="p-4 border-t border-[#1F2937] bg-[#0E1424]">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-9 h-9 rounded-full bg-indigo-600/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center font-bold text-sm">
+                    A
+                </div>
+                <div class="truncate">
+                    <p class="text-xs font-semibold text-white">Super Admin</p>
+                    <p class="text-[10px] text-emerald-400 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online
+                    </p>
+                </div>
+            </div>
+            <button @click="logout()" 
+                    class="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors">
+                <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                <span>Sign Out</span>
             </button>
         </div>
-    </div>
+    </aside>
 
-    <!-- Main Content -->
-    <div class="main-content">
-        <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-4 shadow-sm">
+    <!-- MAIN BODY -->
+    <main class="ml-64 flex-1 p-8 min-h-screen">
+
+        <!-- Top Bar -->
+        <header class="flex items-center justify-between pb-6 border-b border-[#1F2937] mb-8">
             <div>
-                <h4 class="mb-1 fw-bold text-dark">Platform Dashboard Overview</h4>
-                <small class="text-muted">Welcome back, Super Admin</small>
+                <h2 class="text-2xl font-bold text-white tracking-tight" 
+                    x-text="currentTab === 'dashboard' ? 'Overview & Analytics' : currentTab === 'courses' ? 'Courses & Batches' : currentTab === 'videos' ? 'Dailymotion Private Lessons' : 'Enrolled Students'">
+                </h2>
+                <p class="text-xs text-slate-400 mt-1">Manage private streams, native mobile app feeds and users</p>
             </div>
-            <div class="d-flex gap-2">
-                <a href="./courses/" class="btn btn-primary rounded-pill px-3 shadow-sm"><i class="bi bi-plus-circle me-1"></i> Courses</a>
-                <a href="./videos/" class="btn btn-success rounded-pill px-3 shadow-sm"><i class="bi bi-cloud-arrow-up me-1"></i> Lessons</a>
-                <a href="./users/" class="btn btn-dark rounded-pill px-3 shadow-sm"><i class="bi bi-people me-1"></i> View Students</a>
+            <div class="flex items-center gap-3">
+                <button @click="refreshAll()" class="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition" title="Refresh Data">
+                    <i data-lucide="rotate-cw" class="w-4 h-4" :class="loading ? 'animate-spin' : ''"></i>
+                </button>
+                <button @click="openModal('course')" class="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    <span>New Course</span>
+                </button>
+                <button @click="openModal('video')" class="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-600/30 transition">
+                    <i data-lucide="video" class="w-4 h-4"></i>
+                    <span>Add Video</span>
+                </button>
             </div>
-        </div>
+        </header>
 
-        <!-- 4 Stats Cards Grid -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-3">
-                <div class="card stat-card p-4 bg-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <span class="text-muted fw-semibold small text-uppercase">Total Students</span>
-                            <h2 class="fw-bold text-dark mt-2 mb-0" id="statUsers">-</h2>
-                        </div>
-                        <div class="bg-info bg-opacity-10 p-3 rounded-4 text-info">
-                            <i class="bi bi-people-fill fs-2"></i>
+        <!-- TAB: DASHBOARD -->
+        <section x-show="currentTab === 'dashboard'" class="space-y-8">
+            <!-- 4 Stat Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div class="bg-[#111827] border border-[#1F2937] p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/50 transition">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Registered Students</span>
+                        <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl">
+                            <i data-lucide="users" class="w-5 h-5"></i>
                         </div>
                     </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card stat-card p-4 bg-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <span class="text-muted fw-semibold small text-uppercase">Total Courses</span>
-                            <h2 class="fw-bold text-primary mt-2 mb-0" id="statCourses">-</h2>
-                        </div>
-                        <div class="bg-primary bg-opacity-10 p-3 rounded-4 text-primary">
-                            <i class="bi bi-journal-album fs-2"></i>
-                        </div>
+                    <p class="text-3xl font-extrabold text-white mt-4" x-text="stats.users || 0"></p>
+                    <div class="mt-2 flex items-center text-[11px] text-emerald-400 gap-1 font-medium">
+                        <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+                        <span>Live app sync</span>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card stat-card p-4 bg-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <span class="text-muted fw-semibold small text-uppercase">Video Lessons</span>
-                            <h2 class="fw-bold text-success mt-2 mb-0" id="statVideos">-</h2>
-                        </div>
-                        <div class="bg-success bg-opacity-10 p-3 rounded-4 text-success">
-                            <i class="bi bi-camera-reels fs-2"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card stat-card p-4 bg-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <span class="text-muted fw-semibold small text-uppercase">Categories</span>
-                            <h2 class="fw-bold text-warning mt-2 mb-0" id="statCategories">-</h2>
-                        </div>
-                        <div class="bg-warning bg-opacity-10 p-3 rounded-4 text-warning">
-                            <i class="bi bi-tags-fill fs-2"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Recent Courses Table -->
-        <div class="card bg-white p-4">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0">Active Batches & Courses</h5>
-                <a href="./courses/" class="btn btn-sm btn-outline-primary rounded-pill px-3">Manage All Courses →</a>
+                <div class="bg-[#111827] border border-[#1F2937] p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/50 transition">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Batches</span>
+                        <div class="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                            <i data-lucide="book-marked" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-extrabold text-white mt-4" x-text="stats.courses || 0"></p>
+                    <div class="mt-2 text-[11px] text-slate-400 font-medium">All active courses</div>
+                </div>
+
+                <div class="bg-[#111827] border border-[#1F2937] p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/50 transition">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Private Lessons</span>
+                        <div class="p-2.5 bg-amber-500/10 text-amber-400 rounded-xl">
+                            <i data-lucide="clapperboard" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-extrabold text-white mt-4" x-text="stats.videos || 0"></p>
+                    <div class="mt-2 text-[11px] text-indigo-400 font-medium">Dailymotion Synced</div>
+                </div>
+
+                <div class="bg-[#111827] border border-[#1F2937] p-5 rounded-2xl relative overflow-hidden group hover:border-indigo-500/50 transition">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Categories</span>
+                        <div class="p-2.5 bg-sky-500/10 text-sky-400 rounded-xl">
+                            <i data-lucide="tag" class="w-5 h-5"></i>
+                        </div>
+                    </div>
+                    <p class="text-3xl font-extrabold text-white mt-4" x-text="stats.categories || 0"></p>
+                    <div class="mt-2 text-[11px] text-slate-400 font-medium">HSSC, SSC & Tech</div>
+                </div>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead class="table-light">
+
+            <!-- Quick Table Preview -->
+            <div class="bg-[#111827] border border-[#1F2937] rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-5">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i> Active Courses
+                    </h3>
+                    <button @click="currentTab = 'courses'" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">View all courses →</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-300">
+                        <thead class="text-xs uppercase bg-slate-800/50 text-slate-400 border-b border-slate-800">
+                            <tr>
+                                <th class="p-3">Course</th>
+                                <th class="p-3">Category</th>
+                                <th class="p-3">Price</th>
+                                <th class="p-3">Lessons</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60">
+                            <template x-for="c in courses.slice(0, 4)" :key="c.id">
+                                <tr class="hover:bg-slate-800/30 transition">
+                                    <td class="p-3 flex items-center gap-3">
+                                        <img :src="c.thumbnail || 'https://via.placeholder.com/80'" class="w-10 h-10 rounded-lg object-cover bg-slate-800">
+                                        <span class="font-semibold text-white truncate max-w-xs" x-text="c.title"></span>
+                                    </td>
+                                    <td class="p-3 text-xs text-slate-400" x-text="c.category_name || 'General'"></td>
+                                    <td class="p-3 font-semibold text-emerald-400" x-text="c.price > 0 ? '₹' + c.price : 'Free'"></td>
+                                    <td class="p-3"><span class="px-2.5 py-1 text-xs rounded-full bg-indigo-500/10 text-indigo-400 font-medium" x-text="(c.total_videos || 0) + ' Lessons'"></span></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: COURSES -->
+        <section x-show="currentTab === 'courses'" class="space-y-6">
+            <div class="flex items-center justify-between">
+                <input type="text" x-model="searchCourse" placeholder="Search courses..." 
+                       class="px-4 py-2 bg-[#111827] border border-[#1F2937] rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-72">
+                <button @click="openModal('course')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold">
+                    + Add New Course
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <template x-for="c in filteredCourses" :key="c.id">
+                    <div class="bg-[#111827] border border-[#1F2937] rounded-2xl overflow-hidden group hover:border-indigo-500/50 transition flex flex-col">
+                        <div class="h-44 w-full relative overflow-hidden bg-slate-900">
+                            <img :src="c.thumbnail || 'https://via.placeholder.com/400'" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                            <span class="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-sky-400 text-[11px] font-bold px-2.5 py-1 rounded-md" x-text="c.category_name || 'Course'"></span>
+                            <span class="absolute bottom-3 right-3 bg-indigo-600 text-white text-xs font-bold px-2.5 py-1 rounded-md" x-text="c.price > 0 ? '₹' + c.price : 'FREE'"></span>
+                        </div>
+                        <div class="p-5 flex-1 flex flex-col justify-between">
+                            <div>
+                                <h4 class="font-bold text-white text-base leading-snug line-clamp-2" x-text="c.title"></h4>
+                                <p class="text-xs text-slate-400 mt-2 line-clamp-2" x-text="c.description || 'No description provided.'"></p>
+                            </div>
+                            <div class="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between">
+                                <span class="text-xs text-indigo-400 font-semibold" x-text="(c.total_videos || 0) + ' Lessons'"></span>
+                                <button @click="deleteCourse(c.id)" class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </section>
+
+        <!-- TAB: VIDEOS -->
+        <section x-show="currentTab === 'videos'" class="space-y-6">
+            <div class="flex items-center justify-between">
+                <p class="text-xs text-slate-400">Total <span class="text-white font-semibold" x-text="videos.length"></span> private video lessons synchronized</p>
+                <button @click="openModal('video')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold">
+                    + Add Dailymotion Video
+                </button>
+            </div>
+
+            <div class="bg-[#111827] border border-[#1F2937] rounded-2xl overflow-hidden">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="text-xs uppercase bg-slate-800/50 text-slate-400 border-b border-slate-800">
                         <tr>
-                            <th>#</th>
-                            <th>Thumbnail</th>
-                            <th>Course Title</th>
-                            <th>Batch Price</th>
-                            <th>Total Lessons</th>
+                            <th class="p-4">#</th>
+                            <th class="p-4">Title</th>
+                            <th class="p-4">Course</th>
+                            <th class="p-4">Dailymotion ID</th>
+                            <th class="p-4">Duration</th>
+                            <th class="p-4">Access</th>
+                            <th class="p-4 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="overviewTableBody">
-                        <tr><td colspan="5" class="text-center py-4">Loading stats...</td></tr>
+                    <tbody class="divide-y divide-slate-800/60">
+                        <template x-for="(v, idx) in videos" :key="v.id">
+                            <tr class="hover:bg-slate-800/30 transition">
+                                <td class="p-4 text-slate-500 font-mono text-xs" x-text="idx + 1"></td>
+                                <td class="p-4 font-semibold text-white" x-text="v.title"></td>
+                                <td class="p-4 text-xs text-slate-400" x-text="v.course_name"></td>
+                                <td class="p-4">
+                                    <span class="px-2.5 py-1 text-xs rounded-lg bg-sky-500/10 text-sky-400 font-mono font-medium" x-text="v.dailymotion_id"></span>
+                                </td>
+                                <td class="p-4 font-mono text-xs text-emerald-400 font-bold" x-text="v.duration"></td>
+                                <td class="p-4">
+                                    <span :class="v.is_free_preview == 1 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'"
+                                          class="px-2 py-0.5 rounded text-[11px] font-semibold"
+                                          x-text="v.is_free_preview == 1 ? 'Free Demo' : 'Locked'"></span>
+                                </td>
+                                <td class="p-4 text-right">
+                                    <button @click="deleteVideo(v.id)" class="p-1.5 hover:bg-rose-500/20 text-rose-400 rounded-lg transition" title="Delete">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
                     </tbody>
                 </table>
             </div>
+        </section>
+
+        <!-- TAB: USERS -->
+        <section x-show="currentTab === 'users'" class="space-y-6">
+            <div class="bg-[#111827] border border-[#1F2937] rounded-2xl overflow-hidden p-6">
+                <div class="flex items-center justify-between mb-5">
+                    <h3 class="text-base font-bold text-white">Registered App Students</h3>
+                    <button @click="loadUsers()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh List
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-300">
+                        <thead class="text-xs uppercase bg-slate-800/50 text-slate-400 border-b border-slate-800">
+                            <tr>
+                                <th class="p-3">Student Name</th>
+                                <th class="p-3">Email</th>
+                                <th class="p-3">Phone</th>
+                                <th class="p-3">Registration Date</th>
+                                <th class="p-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60">
+                            <template x-for="u in users" :key="u.id">
+                                <tr class="hover:bg-slate-800/30 transition">
+                                    <td class="p-3 flex items-center gap-3">
+                                        <div class="w-9 h-9 rounded-full bg-indigo-600/20 text-indigo-400 font-bold flex items-center justify-center text-xs"
+                                             x-text="u.name ? u.name.charAt(0).toUpperCase() : 'S'"></div>
+                                        <span class="font-semibold text-white" x-text="u.name"></span>
+                                    </td>
+                                    <td class="p-3 text-xs text-indigo-300 font-mono" x-text="u.email"></td>
+                                    <td class="p-3 text-xs text-slate-400" x-text="u.phone || 'N/A'"></td>
+                                    <td class="p-3 text-xs text-slate-500" x-text="u.created_at"></td>
+                                    <td class="p-3 text-right">
+                                        <button @click="deleteUser(u.id)" class="text-rose-400 hover:text-rose-300 p-1.5">
+                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL: CREATE COURSE -->
+    <div x-show="showCourseModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" x-transition>
+        <div class="bg-[#111827] border border-[#1F2937] rounded-2xl w-full max-w-lg p-6 shadow-2xl relative" @click.away="showCourseModal = false">
+            <h3 class="text-lg font-bold text-white mb-4">Create New Course / Batch</h3>
+            <form @submit.prevent="saveCourse()">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Course Title *</label>
+                        <input type="text" x-model="formCourse.title" required placeholder="e.g. HSSC CET Super Batch 2026"
+                               class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Category</label>
+                        <select x-model="formCourse.category_id" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
+                            <template x-for="cat in categories" :key="cat.id">
+                                <option :value="cat.id" x-text="cat.title"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Price (₹)</label>
+                        <input type="number" step="0.01" x-model="formCourse.price" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Cover Thumbnail URL</label>
+                        <input type="url" x-model="formCourse.thumbnail" placeholder="https://images.unsplash.com/..." class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Description</label>
+                        <textarea x-model="formCourse.description" rows="3" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+                    </div>
+                </div>
+                <div class="mt-6 flex items-center justify-end gap-3">
+                    <button type="button" @click="showCourseModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700">Cancel</button>
+                    <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/30">Save Course</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <!-- MODAL: ADD VIDEO (WITH AUTO DURATION) -->
+    <div x-show="showVideoModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" x-transition>
+        <div class="bg-[#111827] border border-[#1F2937] rounded-2xl w-full max-w-lg p-6 shadow-2xl relative" @click.away="showVideoModal = false">
+            <h3 class="text-lg font-bold text-white mb-4">Add Private Video Lesson</h3>
+            <form @submit.prevent="saveVideo()">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Select Course *</label>
+                        <select x-model="formVideo.course_id" required class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
+                            <template x-for="c in courses" :key="c.id">
+                                <option :value="c.id" x-text="c.title"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-indigo-400 mb-1">Dailymotion ID or Share Link *</label>
+                        <div class="flex gap-2">
+                            <input type="text" x-model="formVideo.dailymotion_id" @blur="autoFetchDailymotion()" required placeholder="e.g. x992mce or https://dai.ly/..."
+                                   class="flex-1 px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 font-mono">
+                            <button type="button" @click="autoFetchDailymotion()" class="px-3 py-2 bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold hover:bg-indigo-600 hover:text-white transition">
+                                Auto Fetch
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-500 mt-1" x-text="fetchStatus || 'Tip: Title and duration will auto-fill from Dailymotion'"></p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 mb-1">Lesson Title *</label>
+                        <input type="text" x-model="formVideo.title" required placeholder="Lesson title"
+                               class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-emerald-400 mb-1">Duration (Auto)</label>
+                            <input type="text" x-model="formVideo.duration" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm font-mono text-emerald-400 font-bold focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 mb-1">Sort Order</label>
+                            <input type="number" x-model="formVideo.sort_order" class="w-full px-3.5 py-2.5 bg-[#0B0F19] border border-[#1F2937] rounded-xl text-sm text-white focus:outline-none">
+                        </div>
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer mt-2">
+                        <input type="checkbox" x-model="formVideo.is_free_preview" class="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700">
+                        <span class="text-xs text-slate-300">Allow free preview demo</span>
+                    </label>
+                </div>
+                <div class="mt-6 flex items-center justify-end gap-3">
+                    <button type="button" @click="showVideoModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-700">Cancel</button>
+                    <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-600/30">Save Video</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ALPINE LOGIC -->
     <script>
-        const API_BASE = '../api';
+        function adminPortal() {
+            return {
+                currentTab: 'dashboard',
+                loading: false,
+                stats: { courses: 0, videos: 0, categories: 0, users: 0 },
+                courses: [],
+                categories: [],
+                videos: [],
+                users: [],
+                searchCourse: '',
+                showCourseModal: false,
+                showVideoModal: false,
+                fetchStatus: '',
+                formCourse: { id: 0, title: '', category_id: 1, price: 0, thumbnail: '', description: '' },
+                formVideo: { id: 0, course_id: 1, title: '', dailymotion_id: '', duration: '00:00', sort_order: 1, is_free_preview: false },
 
-        function logoutAdmin() {
-            localStorage.removeItem('admin_token');
-            window.location.href = './login/';
-        }
+                async init() {
+                    if (!localStorage.getItem('admin_token')) {
+                        window.location.href = './login/';
+                        return;
+                    }
+                    await this.refreshAll();
+                    lucide.createIcons();
+                },
 
-        async function init() {
-            try {
-                const sRes = await fetch(`${API_BASE}/admin_crud.php?action=stats`);
-                const sData = await sRes.json();
-                if (sData.status) {
-                    document.getElementById('statCourses').innerText = sData.data.courses;
-                    document.getElementById('statVideos').innerText = sData.data.videos;
-                    document.getElementById('statCategories').innerText = sData.data.categories;
-                    document.getElementById('statUsers').innerText = sData.data.users || 0;
+                get filteredCourses() {
+                    if (!this.searchCourse) return this.courses;
+                    return this.courses.filter(c => c.title.toLowerCase().includes(this.searchCourse.toLowerCase()));
+                },
+
+                async refreshAll() {
+                    this.loading = true;
+                    await Promise.all([this.loadStats(), this.loadCourses(), this.loadCategories(), this.loadUsers()]);
+                    await this.loadAllVideos();
+                    this.loading = false;
+                    this.$nextTick(() => lucide.createIcons());
+                },
+
+                async loadStats() {
+                    try {
+                        const res = await fetch('../api/admin_crud.php?action=stats');
+                        const d = await res.json();
+                        if (d.status) this.stats = d.data;
+                    } catch(e) {}
+                },
+
+                async loadCategories() {
+                    try {
+                        const res = await fetch('../api/courses.php?action=categories');
+                        const d = await res.json();
+                        if (d.status) this.categories = d.data;
+                    } catch(e) {}
+                },
+
+                async loadCourses() {
+                    try {
+                        const res = await fetch('../api/courses.php?action=list');
+                        const d = await res.json();
+                        if (d.status) this.courses = d.data;
+                    } catch(e) {}
+                },
+
+                async loadAllVideos() {
+                    let list = [];
+                    for (const c of this.courses) {
+                        try {
+                            const res = await fetch(`../api/courses.php?action=detail&id=${c.id}`);
+                            const d = await res.json();
+                            if (d.status && d.data.videos) {
+                                list = list.concat(d.data.videos.map(v => ({ ...v, course_name: c.title })));
+                            }
+                        } catch(e) {}
+                    }
+                    this.videos = list;
+                    this.stats.videos = list.length;
+                },
+
+                async loadUsers() {
+                    try {
+                        const res = await fetch('../api/admin_crud.php?action=list_users');
+                        const d = await res.json();
+                        if (d.status) this.users = d.data;
+                    } catch(e) {}
+                },
+
+                async autoFetchDailymotion() {
+                    const id = this.formVideo.dailymotion_id.trim();
+                    if (!id) return;
+                    this.fetchStatus = 'Fetching duration & title from Dailymotion...';
+                    try {
+                        const res = await fetch(`../api/admin_crud.php?action=fetch_dm_info&dailymotion_id=${encodeURIComponent(id)}`);
+                        const d = await res.json();
+                        if (d.status && d.data) {
+                            this.formVideo.title = d.data.title || this.formVideo.title;
+                            this.formVideo.duration = d.data.duration || '00:00';
+                            this.fetchStatus = `✅ Synced: ${d.data.title} (${d.data.duration})`;
+                            this.toast(`Duration auto-calculated: ${d.data.duration}`, 'success');
+                        } else {
+                            this.fetchStatus = 'Could not fetch automatically. Please enter manually.';
+                        }
+                    } catch(e) {
+                        this.fetchStatus = 'Error connecting to Dailymotion API';
+                    }
+                },
+
+                openModal(type) {
+                    if (type === 'course') {
+                        this.formCourse = { id: 0, title: '', category_id: this.categories[0]?.id || 1, price: 0, thumbnail: '', description: '' };
+                        this.showCourseModal = true;
+                    } else {
+                        this.formVideo = { id: 0, course_id: this.courses[0]?.id || 1, title: '', dailymotion_id: '', duration: '00:00', sort_order: 1, is_free_preview: false };
+                        this.fetchStatus = '';
+                        this.showVideoModal = true;
+                    }
+                },
+
+                async saveCourse() {
+                    try {
+                        const res = await fetch('../api/admin_crud.php?action=save_course', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.formCourse)
+                        });
+                        const d = await res.json();
+                        if (d.status) {
+                            this.toast(d.message, 'success');
+                            this.showCourseModal = false;
+                            this.refreshAll();
+                        } else { this.toast(d.message, 'error'); }
+                    } catch(e) { this.toast('Server error', 'error'); }
+                },
+
+                async saveVideo() {
+                    try {
+                        const res = await fetch('../api/admin_crud.php?action=save_video', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.formVideo)
+                        });
+                        const d = await res.json();
+                        if (d.status) {
+                            this.toast(d.message, 'success');
+                            this.showVideoModal = false;
+                            this.refreshAll();
+                        } else { this.toast(d.message, 'error'); }
+                    } catch(e) { this.toast('Server error', 'error'); }
+                },
+
+                async deleteCourse(id) {
+                    if (!confirm('Are you sure you want to delete this course and its videos?')) return;
+                    const res = await fetch('../api/admin_crud.php?action=delete_course', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id })
+                    });
+                    const d = await res.json();
+                    if (d.status) { this.toast(d.message, 'success'); this.refreshAll(); }
+                },
+
+                async deleteVideo(id) {
+                    if (!confirm('Are you sure you want to delete this lesson?')) return;
+                    const res = await fetch('../api/admin_crud.php?action=delete_video', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id })
+                    });
+                    const d = await res.json();
+                    if (d.status) { this.toast(d.message, 'success'); this.refreshAll(); }
+                },
+
+                async deleteUser(id) {
+                    if (!confirm('Are you sure you want to delete this student account?')) return;
+                    const res = await fetch('../api/admin_crud.php?action=delete_user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id })
+                    });
+                    const d = await res.json();
+                    if (d.status) { this.toast(d.message, 'success'); this.loadUsers(); }
+                },
+
+                toast(text, type = 'success') {
+                    Toastify({
+                        text: text, duration: 3000, gravity: "top", position: "right",
+                        style: {
+                            background: type === 'success' ? '#059669' : '#DC2626',
+                            borderRadius: '12px',
+                            fontWeight: '600'
+                        }
+                    }).showToast();
+                },
+
+                logout() {
+                    localStorage.removeItem('admin_token');
+                    window.location.href = './login/';
                 }
-
-                const cRes = await fetch(`${API_BASE}/courses.php?action=list`);
-                const cData = await cRes.json();
-                const tbody = document.getElementById('overviewTableBody');
-                if (cData.status && cData.data.length > 0) {
-                    tbody.innerHTML = cData.data.slice(0, 5).map((c, i) => `
-                        <tr>
-                            <td>${i + 1}</td>
-                            <td><img src="${c.thumbnail || 'https://via.placeholder.com/80'}" style="width: 52px; height: 52px; object-fit: cover; border-radius: 10px;"></td>
-                            <td><div class="fw-bold text-dark">${c.title}</div><small class="text-muted"><i class="bi bi-tag me-1"></i>${c.category_name || 'General'}</small></td>
-                            <td class="fw-bold text-success">${c.price > 0 ? '₹' + c.price : '<span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2 py-1">Free</span>'}</td>
-                            <td><span class="badge bg-primary rounded-pill px-3 py-2">${c.total_videos || 0} Lessons</span></td>
-                        </tr>
-                    `).join('');
-                } else {
-                    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4">No courses yet.</td></tr>`;
-                }
-            } catch(e) {}
+            }
         }
-
-        window.addEventListener('DOMContentLoaded', init);
     </script>
 </body>
 </html>
