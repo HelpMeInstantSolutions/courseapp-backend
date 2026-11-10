@@ -39,7 +39,65 @@ switch ($action) {
         sendResponse(true, "Logged out successfully");
         break;
 
-    case 'stats':
+    case 'fetch_dm_info':
+        $dmId = trim($input['dailymotion_id'] ?? ($_GET['dailymotion_id'] ?? ''));
+        if (!$dmId) {
+            sendResponse(false, "Dailymotion ID is required", null, 400);
+        }
+
+        if (preg_match('/(?:dailymotion\.com\/(?:video|hub)\/|dai\.ly\/)([a-zA-Z0-9]+)/', $dmId, $matches)) {
+            $dmId = $matches[1];
+        }
+
+        // Get owner bearer token from json
+        $tokenFile = __DIR__ . '/../database/dm_user_token.json';
+        $token = null;
+        if (file_exists($tokenFile)) {
+            $tData = json_decode(file_get_contents($tokenFile), true);
+            $token = $tData['access_token'] ?? null;
+        }
+
+        $url = "https://api.dailymotion.com/video/" . $dmId . "?fields=id,title,duration,thumbnail_url,private";
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        if ($token) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $token]);
+        }
+        curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $res = curl_exec($ch);
+        curl_close($ch);
+
+        if ($res) {
+            $json = json_decode($res, true);
+            if (isset($json['id'])) {
+                // Convert seconds to MM:SS or HH:MM:SS
+                $secs = (int)($json['duration'] ?? 0);
+                $hrs = floor($secs / 3600);
+                $mins = floor(($secs % 3600) / 60);
+                $remSecs = $secs % 60;
+
+                if ($hrs > 0) {
+                    $formattedDuration = sprintf("%02d:%02d:%02d", $hrs, $mins, $remSecs);
+                } else {
+                    $formattedDuration = sprintf("%02d:%02d", $mins, $remSecs);
+                }
+
+                sendResponse(true, "Video details fetched automatically!", [
+                    'id' => $json['id'],
+                    'title' => $json['title'] ?? '',
+                    'duration' => $formattedDuration,
+                    'seconds' => $secs,
+                    'thumbnail' => $json['thumbnail_url'] ?? '',
+                    'private' => $json['private'] ?? false
+                ]);
+            } else {
+                sendResponse(false, $json['error']['message'] ?? "Video not found", null, 404);
+            }
+        } else {
+            sendResponse(false, "Could not connect to Dailymotion", null, 500);
+        }
+        break;
         $totalCourses = $pdo->query("SELECT COUNT(*) FROM courses")->fetchColumn();
         $totalVideos = $pdo->query("SELECT COUNT(*) FROM videos")->fetchColumn();
         $totalCategories = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();

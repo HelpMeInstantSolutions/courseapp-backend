@@ -8,14 +8,14 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <style>
-        :root { --sidebar-width: 260px; }
-        body { background-color: #f8fafc; font-family: system-ui, sans-serif; }
-        .sidebar { width: var(--sidebar-width); height: 100vh; position: fixed; top: 0; left: 0; background: #0f172a; color: #f1f5f9; z-index: 1000; }
-        .main-content { margin-left: var(--sidebar-width); padding: 24px; min-height: 100vh; }
-        .nav-link { color: #94a3b8; border-radius: 8px; padding: 10px 16px; margin: 4px 12px; font-weight: 500; text-decoration: none; display: block; }
+        :root { --sidebar-width: 270px; }
+        body { background-color: #f1f5f9; font-family: system-ui, -apple-system, sans-serif; }
+        .sidebar { width: var(--sidebar-width); height: 100vh; position: fixed; top: 0; left: 0; background: #0f172a; color: #f1f5f9; z-index: 1000; box-shadow: 4px 0 10px rgba(0,0,0,0.1); }
+        .main-content { margin-left: var(--sidebar-width); padding: 28px; min-height: 100vh; }
+        .nav-link { color: #94a3b8; border-radius: 10px; padding: 12px 18px; margin: 4px 12px; font-weight: 500; text-decoration: none; display: flex; align-items: center; transition: all 0.2s; }
         .nav-link:hover, .nav-link.active { color: #ffffff; background: #1e293b; }
-        .nav-link.active { background: #4338ca; }
-        .card { border: 1px solid #e2e8f0; border-radius: 12px; }
+        .nav-link.active { background: #4f46e5; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); }
+        .card { border: none; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
         .badge-dm { background: #0066dc; color: white; }
     </style>
 </head>
@@ -26,8 +26,10 @@
 
     <!-- Sidebar -->
     <div class="sidebar d-flex flex-column p-3">
-        <div class="d-flex align-items-center mb-4 px-2">
-            <i class="bi bi-play-circle-fill text-primary fs-3 me-2"></i>
+        <div class="d-flex align-items-center mb-4 px-2 pt-2">
+            <div class="bg-primary p-2 rounded-3 text-white me-3 shadow">
+                <i class="bi bi-play-circle-fill fs-4"></i>
+            </div>
             <div>
                 <h5 class="mb-0 text-white fw-bold">CourseApp</h5>
                 <small class="text-secondary">courseapp.mybhiwani.in</small>
@@ -35,31 +37,32 @@
         </div>
         <hr class="text-secondary my-2">
         <ul class="nav flex-column mb-auto">
-            <li><a href="../" class="nav-link"><i class="bi bi-grid-fill me-2"></i> Dashboard</a></li>
-            <li><a href="../courses/" class="nav-link"><i class="bi bi-collection-play-fill me-2"></i> Manage Courses</a></li>
-            <li><a href="../videos/" class="nav-link active"><i class="bi bi-film me-2"></i> Dailymotion Lessons</a></li>
+            <li><a href="../" class="nav-link"><i class="bi bi-grid-fill me-3 fs-5"></i> Dashboard</a></li>
+            <li><a href="../courses/" class="nav-link"><i class="bi bi-collection-play-fill me-3 fs-5"></i> Manage Courses</a></li>
+            <li><a href="../videos/" class="nav-link active"><i class="bi bi-film me-3 fs-5"></i> Dailymotion Lessons</a></li>
+            <li><a href="../users/" class="nav-link"><i class="bi bi-people-fill me-3 fs-5"></i> Students / Users</a></li>
         </ul>
         <hr class="text-secondary">
         <div class="px-2">
-            <button class="btn btn-outline-danger w-100 btn-sm" onclick="logoutAdmin()">
-                <i class="bi bi-box-arrow-right me-1"></i> Logout
+            <button class="btn btn-outline-danger w-100 btn-sm py-2" onclick="logoutAdmin()">
+                <i class="bi bi-box-arrow-right me-1"></i> Logout Admin
             </button>
         </div>
     </div>
 
     <!-- Main Content -->
     <div class="main-content">
-        <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-3 shadow-sm border">
+        <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-4 shadow-sm">
             <div>
-                <h4 class="mb-0 fw-bold">Dailymotion Video Lessons</h4>
-                <small class="text-muted">Direct Link: /admin/videos/</small>
+                <h4 class="mb-1 fw-bold text-dark">Dailymotion Private Video Lessons</h4>
+                <small class="text-muted">Auto duration & title sync with Owner Bearer Token</small>
             </div>
-            <button class="btn btn-success" onclick="openNewVideoModal()">
+            <button class="btn btn-success rounded-pill px-4 shadow-sm" onclick="openNewVideoModal()">
                 <i class="bi bi-cloud-arrow-up me-1"></i> Add Video Lesson
             </button>
         </div>
 
-        <div class="card bg-white p-3">
+        <div class="card bg-white p-4">
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead class="table-light">
@@ -69,7 +72,7 @@
                             <th>Course Name</th>
                             <th>Dailymotion ID</th>
                             <th>Duration</th>
-                            <th>Status</th>
+                            <th>Preview Mode</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -81,48 +84,60 @@
         </div>
     </div>
 
-    <!-- Modal: Add Video -->
+    <!-- Modal: Add Video with Auto Duration -->
     <div class="modal fade" id="videoModal" tabindex="-1">
         <div class="modal-dialog">
-            <div class="modal-content">
+            <div class="modal-content border-0 shadow-lg rounded-4">
                 <form id="videoForm" onsubmit="handleSaveVideo(event)">
-                    <div class="modal-header">
-                        <h5 class="modal-title fw-bold">Add Dailymotion Lesson</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header bg-success text-white rounded-top-4">
+                        <h5 class="modal-title fw-bold" id="videoModalTitle"><i class="bi bi-camera-video me-2"></i>Add Video Lesson</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body p-4">
                         <input type="hidden" id="videoId" value="0">
+                        
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Select Course *</label>
-                            <select class="form-select" id="videoCourseId" required></select>
+                            <label class="form-label fw-semibold">Select Course / Batch *</label>
+                            <select class="form-select rounded-3" id="videoCourseId" required></select>
                         </div>
+
+                        <!-- Auto-fetch trigger field -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold text-primary">Dailymotion Video ID / Link *</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-primary bg-opacity-10 text-primary border-0"><i class="bi bi-link-45deg"></i></span>
+                                <input type="text" class="form-control" id="videoDmId" required placeholder="e.g. x992mce or https://dai.ly/..." onblur="autoFetchDailymotionInfo()">
+                                <button class="btn btn-outline-primary" type="button" onclick="autoFetchDailymotionInfo()">
+                                    <i class="bi bi-magic me-1"></i> Auto Fetch
+                                </button>
+                            </div>
+                            <small class="text-muted" id="dmFetchStatus">Tip: Paste the ID/Link and title & duration will auto-fill!</small>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Lesson Title *</label>
-                            <input type="text" class="form-control" id="videoTitle" required placeholder="e.g. Lecture 01: Introduction">
+                            <input type="text" class="form-control rounded-3" id="videoTitle" required placeholder="Title will auto-fill from Dailymotion">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Dailymotion Video ID / URL *</label>
-                            <input type="text" class="form-control" id="videoDmId" required placeholder="e.g. x98hbpm">
-                            <small class="text-muted">Example: <strong>x98hbpm</strong> (set to Private in Dailymotion)</small>
-                        </div>
+
                         <div class="row">
                             <div class="col-6 mb-3">
-                                <label class="form-label fw-semibold">Duration</label>
-                                <input type="text" class="form-control" id="videoDuration" value="20:00" placeholder="MM:SS">
+                                <label class="form-label fw-semibold text-success"><i class="bi bi-clock me-1"></i>Duration (Auto)</label>
+                                <input type="text" class="form-control rounded-3 fw-bold text-success" id="videoDuration" value="00:00" placeholder="HH:MM:SS">
                             </div>
                             <div class="col-6 mb-3">
                                 <label class="form-label fw-semibold">Sort Order</label>
-                                <input type="number" class="form-control" id="videoSortOrder" value="1">
+                                <input type="number" class="form-control rounded-3" id="videoSortOrder" value="1">
                             </div>
                         </div>
-                        <div class="form-check form-switch mb-2">
+
+                        <div class="form-check form-switch mt-2">
                             <input class="form-check-input" type="checkbox" id="videoIsPreview">
-                            <label class="form-check-label" for="videoIsPreview">Allow Free Preview</label>
+                            <label class="form-check-label fw-medium" for="videoIsPreview">Allow Free Demo Preview (Locked by default)</label>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-success">Save Lesson</button>
+                    <div class="modal-footer border-0 pt-0">
+                        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success rounded-pill px-4" id="btnSaveLesson">Save Lesson</button>
                     </div>
                 </form>
             </div>
@@ -162,6 +177,29 @@
             } catch(e) {}
         }
 
+        async function autoFetchDailymotionInfo() {
+            const val = document.getElementById('videoDmId').value.trim();
+            if (!val) return;
+
+            const statusLabel = document.getElementById('dmFetchStatus');
+            statusLabel.innerHTML = `<span class="text-primary"><i class="bi bi-hourglass-split"></i> Fetching duration & title from Dailymotion...</span>`;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin_crud.php?action=fetch_dm_info&dailymotion_id=${encodeURIComponent(val)}`);
+                const json = await res.json();
+                if (json.status && json.data) {
+                    document.getElementById('videoTitle').value = json.data.title || document.getElementById('videoTitle').value;
+                    document.getElementById('videoDuration').value = json.data.duration || '00:00';
+                    statusLabel.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> Auto-synced! Duration: ${json.data.duration}</span>`;
+                    showToast(`Synced! Title & Duration: ${json.data.duration}`, 'success');
+                } else {
+                    statusLabel.innerHTML = `<span class="text-warning">Could not auto-fetch. Please enter title manually.</span>`;
+                }
+            } catch(e) {
+                statusLabel.innerHTML = `<span class="text-danger">Failed to connect to Dailymotion.</span>`;
+            }
+        }
+
         async function loadVideos() {
             try {
                 const res = await fetch(`${API_BASE}/courses.php?action=list`);
@@ -183,16 +221,18 @@
                     tbody.innerHTML = allVids.map(v => `
                         <tr>
                             <td>${v.id}</td>
-                            <td class="fw-bold">${v.title}</td>
+                            <td class="fw-bold text-dark">${v.title}</td>
                             <td><span class="badge bg-secondary">${v.course_name}</span></td>
-                            <td><span class="badge badge-dm"><i class="bi bi-play-circle me-1"></i>${v.dailymotion_id}</span></td>
-                            <td>${v.duration}</td>
-                            <td>${v.is_free_preview == 1 ? '<span class="badge bg-success">Free Demo</span>' : '<span class="badge bg-warning text-dark">Locked</span>'}</td>
-                            <td><button class="btn btn-sm btn-outline-danger" onclick="deleteVideo(${v.id})"><i class="bi bi-trash"></i></button></td>
+                            <td><span class="badge badge-dm px-2 py-1"><i class="bi bi-play-circle me-1"></i>${v.dailymotion_id}</span></td>
+                            <td><span class="fw-bold text-primary"><i class="bi bi-clock me-1"></i>${v.duration}</span></td>
+                            <td>${v.is_free_preview == 1 ? '<span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-1">Free Demo</span>' : '<span class="badge bg-warning bg-opacity-10 text-warning rounded-pill px-3 py-1">Locked</span>'}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger rounded-circle p-2" onclick="deleteVideo(${v.id})"><i class="bi bi-trash"></i></button>
+                            </td>
                         </tr>
                     `).join('');
                 } else {
-                    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4">No lessons added yet.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5 text-muted">No lessons added yet.</td></tr>`;
                 }
             } catch(e) { showToast("Failed to load videos", "error"); }
         }
@@ -200,6 +240,7 @@
         function openNewVideoModal() {
             document.getElementById('videoForm').reset();
             document.getElementById('videoId').value = "0";
+            document.getElementById('dmFetchStatus').innerHTML = `Tip: Paste the ID/Link and title & duration will auto-fill!`;
             videoModal.show();
         }
 
