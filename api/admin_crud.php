@@ -41,6 +41,7 @@ switch ($action) {
 
     case 'fetch_dm_info':
         $dmId = trim($input['dailymotion_id'] ?? ($_GET['dailymotion_id'] ?? ''));
+        $preferredAccountId = (int)($input['account_id'] ?? ($_GET['account_id'] ?? 0));
         if (!$dmId) {
             sendResponse(false, "Dailymotion ID is required", null, 400);
         }
@@ -49,90 +50,15 @@ switch ($action) {
             $dmId = $matches[1];
         }
 
-        // Get owner bearer token (auto refreshed)
-        $token = getDailymotionAccessToken();
+        // Query across all connected Dailymotion accounts in pool
+        $res = findDmAccountForVideo($pdo, $dmId, $preferredAccountId);
 
-        $queryDm = function($videoId, $bearer) {
-            $url = "https://api.dailymotion.com/video/" . $videoId . "?fields=id,title,duration,thumbnail_url,private";
+        if ($res && isset($res['video']['id'])) {
+            $vData = $res['video'];
+            $account = $res['account'];
+            $token = $res['token'];
 
-            // Method 1: native stream socket (bypasses curl proxy/route issues on shared hosts)
-            $headers = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nAccept: application/json\r\n";
-            if ($bearer) {
-                $headers .= "Authorization: Bearer " . $bearer . "\r\n";
-            }
-            $opts = [
-                'http' => [
-                    'method' => 'GET',
-                    'header' => $headers,
-                    'timeout' => 10,
-                    'ignore_errors' => true
-                ],
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false
-                ]
-            ];
-            $ctx = stream_context_create($opts);
-            $res = @file_get_contents($url, false, $ctx);
-            if ($res) {
-                $decoded = json_decode($res, true);
-                if ($decoded && is_array($decoded) && (isset($decoded['id']) || isset($decoded['error']))) {
-                    return $decoded;
-                }
-            }
-
-            // Method 2: cURL
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-            $cHeaders = ["Accept: application/json"];
-            if ($bearer) {
-                $cHeaders[] = "Authorization: Bearer " . $bearer;
-            }
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $cHeaders);
-            $cRes = curl_exec($ch);
-            $curlErr = curl_error($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            $decoded = $cRes ? json_decode($cRes, true) : null;
-            if (!$decoded) {
-                return [
-                    '_raw' => $cRes ?: $res,
-                    '_curl_err' => $curlErr,
-                    '_http_code' => $httpCode,
-                    '_bearer_len' => $bearer ? strlen($bearer) : 0
-                ];
-            }
-            return $decoded;
-        };
-
-        $json = $queryDm($dmId, $token);
-
-        // If access token was expired / invalid, force refresh and try once more
-        if (isset($json['error'])) {
-            $errMsg = strtolower($json['error']['message'] ?? '');
-            $errCode = (int)($json['error']['code'] ?? 0);
-            if (strpos($errMsg, 'token') !== false || strpos($errMsg, 'expired') !== false || $errCode === 401) {
-                $token = getDailymotionAccessToken(true);
-                $json = $queryDm($dmId, $token);
-            }
-        }
-
-        // If still failing with token, fallback to unauthenticated query (public videos)
-        if (!isset($json['id']) && $token) {
-            $fallback = $queryDm($dmId, null);
-            if (isset($fallback['id'])) {
-                $json = $fallback;
-            }
-        }
-
-        if ($json && isset($json['id'])) {
-            // Convert seconds to MM:SS or HH:MM:SS
-            $secs = (int)($json['duration'] ?? 0);
+            $secs = (int)($vData['duration'] ?? 0);
             $hrs = floor($secs / 3600);
             $mins = floor(($secs % 3600) / 60);
             $remSecs = $secs % 60;
@@ -144,25 +70,170 @@ switch ($action) {
             }
 
             sendResponse(true, "Video details fetched automatically!", [
-                'id' => $json['id'],
-                'title' => $json['title'] ?? '',
+                'id' => $vData['id'],
+                'title' => $vData['title'] ?? '',
                 'duration' => $formattedDuration,
                 'seconds' => $secs,
-                'thumbnail' => $json['thumbnail_url'] ?? '',
-                'private' => $json['private'] ?? false
+                'thumbnail' => $vData['thumbnail_url'] ?? '',
+                'private' => $vData['private'] ?? false,
+                'account_id' => $account ? (int)$account['id'] : 0,
+                'account_name' => $account ? $account['name'] : 'Public / Unlisted',
+                'channel_name' => $account ? ($account['channel_name'] ?? '') : '',
+                '_token' => $token
             ]);
         } else {
-            $err = $json['error']['message'] ?? (!empty($json['_curl_err']) ? $json['_curl_err'] : "Video not found on Dailymotion. Please verify ID or URL.");
-            if ($token && is_array($json)) {
-                $json['_token'] = $token;
-            }
-            sendResponse(false, $err, $json, 404);
+            // Get default account token for client-side direct browser fallback
+            $fallbackToken = getDmAccountToken($pdo);
+            sendResponse(false, "Video not found on any connected Dailymotion account. Please verify ID or URL.", [
+                '_token' => $fallbackToken,
+                'video_id' => $dmId
+            ], 404);
         }
+        break;
+
+    case 'list_dm_accounts':
+        $stmt = $pdo->query("
+            SELECT a.id, a.name, a.channel_name, a.uid, a.email, a.client_id, a.is_default, a.status, a.created_at,
+                   (SELECT COUNT(*) FROM videos v WHERE v.dm_account_id = a.id) as video_count
+            FROM dm_accounts a
+            ORDER BY a.is_default DESC, a.id ASC
+        ");
+        $accounts = $stmt->fetchAll();
+        sendResponse(true, "Dailymotion accounts loaded", $accounts);
+        break;
+
+    case 'save_dm_account':
+        $id = (int)($input['id'] ?? 0);
+        $name = trim($input['name'] ?? '');
+        $clientId = trim($input['client_id'] ?? '');
+        $clientSecret = trim($input['client_secret'] ?? '');
+        $refreshToken = trim($input['refresh_token'] ?? '');
+        $isDefault = !empty($input['is_default']) ? 1 : 0;
+        $status = isset($input['status']) ? (int)$input['status'] : 1;
+
+        if (!$name || !$clientId || !$clientSecret || !$refreshToken) {
+            sendResponse(false, "Account Name, API Key, API Secret, and Refresh Token are all required.", null, 400);
+        }
+
+        // Test credentials by requesting token
+        $postData = http_build_query([
+            'grant_type' => 'refresh_token',
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'refresh_token' => $refreshToken
+        ]);
+        $ch = curl_init('https://api.dailymotion.com/oauth/token');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+        $res = curl_exec($ch);
+        curl_close($ch);
+
+        $tData = $res ? json_decode($res, true) : null;
+        if (!$tData || empty($tData['access_token'])) {
+            $err = $tData['error']['message'] ?? "Failed to connect to Dailymotion. Please verify your API Key, Secret, and Refresh Token.";
+            sendResponse(false, $err, $tData, 400);
+        }
+
+        $accessToken = $tData['access_token'];
+        $expiresAt = time() + (int)($tData['expires_in'] ?? 36000);
+        $newRefreshToken = $tData['refresh_token'] ?? $refreshToken;
+        $uid = $tData['uid'] ?? '';
+
+        // Query user info to get real channel name and email
+        $ch = curl_init("https://api.dailymotion.com/user/me?fields=id,screenname,email");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $accessToken, "Accept: application/json"]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $uRes = curl_exec($ch);
+        curl_close($ch);
+        $uData = $uRes ? json_decode($uRes, true) : null;
+        $channelName = $uData['screenname'] ?? $name;
+        $email = $uData['email'] ?? '';
+        if (!empty($uData['id'])) {
+            $uid = $uData['id'];
+        }
+
+        if ($isDefault) {
+            $pdo->exec("UPDATE dm_accounts SET is_default = 0");
+        }
+
+        if ($id > 0) {
+            $stmt = $pdo->prepare("
+                UPDATE dm_accounts SET name = ?, channel_name = ?, uid = ?, email = ?, client_id = ?, client_secret = ?, refresh_token = ?, access_token = ?, expires_at = ?, is_default = ?, status = ?
+                WHERE id = ?
+            ");
+            $stmt->execute([$name, $channelName, $uid, $email, $clientId, $clientSecret, $newRefreshToken, $accessToken, $expiresAt, $isDefault, $status, $id]);
+            $msg = "Account '{$name}' updated successfully!";
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO dm_accounts (name, channel_name, uid, email, client_id, client_secret, refresh_token, access_token, expires_at, is_default, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$name, $channelName, $uid, $email, $clientId, $clientSecret, $newRefreshToken, $accessToken, $expiresAt, $isDefault, $status]);
+            $id = $pdo->lastInsertId();
+            $msg = "Dailymotion Account '{$channelName}' connected successfully!";
+        }
+
+        sendResponse(true, $msg, [
+            'id' => $id,
+            'name' => $name,
+            'channel_name' => $channelName,
+            'uid' => $uid,
+            'email' => $email
+        ]);
+        break;
+
+    case 'delete_dm_account':
+        $id = (int)($input['id'] ?? ($_GET['id'] ?? 0));
+        if ($id <= 0) {
+            sendResponse(false, "Invalid account ID", null, 400);
+        }
+
+        $check = $pdo->prepare("SELECT * FROM dm_accounts WHERE id = ?");
+        $check->execute([$id]);
+        $acc = $check->fetch();
+        if (!$acc) {
+            sendResponse(false, "Account not found", null, 404);
+        }
+
+        $del = $pdo->prepare("DELETE FROM dm_accounts WHERE id = ?");
+        $del->execute([$id]);
+
+        // If deleted was default, make another one default
+        if ($acc['is_default']) {
+            $pdo->exec("UPDATE dm_accounts SET is_default = 1 WHERE id = (SELECT id FROM dm_accounts LIMIT 1)");
+        }
+
+        // Unlink videos or set dm_account_id = 0
+        $up = $pdo->prepare("UPDATE videos SET dm_account_id = 0 WHERE dm_account_id = ?");
+        $up->execute([$id]);
+
+        sendResponse(true, "Dailymotion account removed successfully.");
         break;
 
     case 'stats':
         $totalCourses = $pdo->query("SELECT COUNT(*) FROM courses")->fetchColumn();
         $totalChapters = $pdo->query("SELECT COUNT(*) FROM chapters")->fetchColumn();
+        $totalVideos = $pdo->query("SELECT COUNT(*) FROM videos")->fetchColumn();
+        $totalCategories = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
+        $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+        $totalDmAccounts = $pdo->query("SELECT COUNT(*) FROM dm_accounts WHERE status = 1")->fetchColumn();
+
+        sendResponse(true, "Stats loaded", [
+            'courses' => $totalCourses,
+            'chapters' => $totalChapters,
+            'videos' => $totalVideos,
+            'categories' => $totalCategories,
+            'users' => $totalUsers,
+            'dm_accounts' => $totalDmAccounts
+        ]);
+        break;
         $totalVideos = $pdo->query("SELECT COUNT(*) FROM videos")->fetchColumn();
         $totalCategories = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
         $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
@@ -280,6 +351,7 @@ switch ($action) {
         $id = (int)($input['id'] ?? 0);
         $courseId = (int)($input['course_id'] ?? 0);
         $chapterId = (int)($input['chapter_id'] ?? 0);
+        $dmAccountId = (int)($input['dm_account_id'] ?? 0);
         $title = trim($input['title'] ?? '');
         $dmId = trim($input['dailymotion_id'] ?? '');
         $duration = trim($input['duration'] ?? '15:00');
@@ -295,13 +367,21 @@ switch ($action) {
             $dmId = $matches[1];
         }
 
+        // If dmAccountId is 0, auto detect which account owns it
+        if ($dmAccountId <= 0) {
+            $found = findDmAccountForVideo($pdo, $dmId);
+            if ($found && !empty($found['account']['id'])) {
+                $dmAccountId = (int)$found['account']['id'];
+            }
+        }
+
         if ($id > 0) {
-            $stmt = $pdo->prepare("UPDATE videos SET course_id = ?, chapter_id = ?, title = ?, dailymotion_id = ?, duration = ?, is_free_preview = ?, sort_order = ? WHERE id = ?");
-            $stmt->execute([$courseId, $chapterId, $title, $dmId, $duration, $isPreview, $sortOrder, $id]);
+            $stmt = $pdo->prepare("UPDATE videos SET course_id = ?, chapter_id = ?, dm_account_id = ?, title = ?, dailymotion_id = ?, duration = ?, is_free_preview = ?, sort_order = ? WHERE id = ?");
+            $stmt->execute([$courseId, $chapterId, $dmAccountId, $title, $dmId, $duration, $isPreview, $sortOrder, $id]);
             sendResponse(true, "Lesson video updated successfully!");
         } else {
-            $stmt = $pdo->prepare("INSERT INTO videos (course_id, chapter_id, title, dailymotion_id, duration, is_free_preview, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$courseId, $chapterId, $title, $dmId, $duration, $isPreview, $sortOrder]);
+            $stmt = $pdo->prepare("INSERT INTO videos (course_id, chapter_id, dm_account_id, title, dailymotion_id, duration, is_free_preview, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$courseId, $chapterId, $dmAccountId, $title, $dmId, $duration, $isPreview, $sortOrder]);
             sendResponse(true, "Lesson video added successfully!");
         }
         break;

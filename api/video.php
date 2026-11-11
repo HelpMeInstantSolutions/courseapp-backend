@@ -41,13 +41,24 @@ if (preg_match('/(?:dailymotion\.com\/(?:video|hub)\/|dai\.ly\/)([a-zA-Z0-9]+)/'
 }
 $video['clean_dm_id'] = $cleanId;
 
-$token = getDailymotionAccessToken();
+$accId = (int)($video['dm_account_id'] ?? 0);
+$found = findDmAccountForVideo($pdo, $cleanId, $accId);
+$token = $found ? $found['token'] : getDmAccountToken($pdo, $accId);
 
 // Query Dailymotion API directly with Owner Bearer Token to get authenticated embed URL
 $dmParams = "autoplay=1&mute=0&controls=1&ui-logo=0&ui-watermark=0&sharing-enable=0&endscreen-enable=0&ui-start-screen-info=0&queue-enable=0";
 $authorizedEmbedUrl = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $cleanId . "&" . $dmParams;
 
-if ($token) {
+if ($found && !empty($found['video']['embed_url'])) {
+    $embed = $found['video']['embed_url'];
+    // Force use of xtv3w Enterprise Player (enable_dm_logo: false, enable_sharing: false, watermark: none)
+    $embed = str_replace('/player.html', '/player/xtv3w.html', $embed);
+    if (strpos($embed, '/player/xtv3w.html') === false && preg_match('/video=([a-zA-Z0-9]+)/', $embed, $vm)) {
+        $embed = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $vm[1];
+    }
+    $authorizedEmbedUrl = $embed . (strpos($embed, '?') !== false ? '&' : '?') . $dmParams;
+    $video['title'] = $found['video']['title'] ?? $video['title'];
+} elseif ($token) {
     $ch = curl_init("https://api.dailymotion.com/video/" . $cleanId . "?fields=id,title,embed_url,private");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $token]);
@@ -60,7 +71,6 @@ if ($token) {
         $dmJson = json_decode($res, true);
         if (isset($dmJson['embed_url']) && !empty($dmJson['embed_url'])) {
             $embed = $dmJson['embed_url'];
-            // Force use of xtv3w Enterprise Player (enable_dm_logo: false, enable_sharing: false, watermark: none)
             $embed = str_replace('/player.html', '/player/xtv3w.html', $embed);
             if (strpos($embed, '/player/xtv3w.html') === false && preg_match('/video=([a-zA-Z0-9]+)/', $embed, $vm)) {
                 $embed = "https://geo.dailymotion.com/player/xtv3w.html?video=" . $vm[1];

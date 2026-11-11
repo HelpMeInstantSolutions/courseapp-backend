@@ -39,8 +39,8 @@ try {
     <?php require_once __DIR__ . '/includes/navbar.php'; ?>
 
     <main class="p-6 md:p-8 space-y-8 max-w-7xl">
-        <!-- 4 Stat Metric Cards (Light Theme) -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <!-- 5 Stat Metric Cards (Light Theme) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <!-- Card 1: Courses -->
             <a href="/admin/courses/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300 transition group block">
                 <div class="flex items-center justify-between">
@@ -60,7 +60,7 @@ try {
             <!-- Card 2: Chapters (Course -> Chapter -> Video) -->
             <a href="/admin/chapters/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300 transition group block">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Course Chapters</span>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Chapters</span>
                     <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition">
                         <i data-lucide="layers" class="w-5 h-5"></i>
                     </div>
@@ -68,7 +68,7 @@ try {
                 <div class="mt-4 flex items-baseline gap-2">
                     <span class="text-3xl font-extrabold text-slate-900"><?= $serverStats['chapters'] ?? 0 ?></span>
                     <span class="text-xs font-semibold text-indigo-600 flex items-center gap-0.5">
-                        Chapters <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                        Curriculum <i data-lucide="arrow-right" class="w-3 h-3"></i>
                     </span>
                 </div>
             </a>
@@ -76,7 +76,7 @@ try {
             <!-- Card 3: Videos -->
             <a href="/admin/videos/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300 transition group block">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Video Lessons</span>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Videos</span>
                     <div class="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center group-hover:scale-105 transition">
                         <i data-lucide="video" class="w-5 h-5"></i>
                     </div>
@@ -84,15 +84,31 @@ try {
                 <div class="mt-4 flex items-baseline gap-2">
                     <span class="text-3xl font-extrabold text-slate-900"><?= $serverStats['videos'] ?></span>
                     <span class="text-xs font-semibold text-violet-600 flex items-center gap-0.5">
-                        Dailymotion <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                        Lessons <i data-lucide="arrow-right" class="w-3 h-3"></i>
                     </span>
                 </div>
             </a>
 
-            <!-- Card 4: Students -->
+            <!-- Card 4: DM Accounts (Multi-Account) -->
+            <a href="/admin/dm_accounts/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-sky-300 transition group block">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">DM Accounts</span>
+                    <div class="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center group-hover:scale-105 transition">
+                        <i data-lucide="cloud-cog" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span class="text-3xl font-extrabold text-slate-900"><?= $serverStats['dm_accounts'] ?? 0 ?></span>
+                    <span class="text-xs font-semibold text-sky-600 flex items-center gap-0.5">
+                        Multi-Acc <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                    </span>
+                </div>
+            </a>
+
+            <!-- Card 5: Students -->
             <a href="/admin/users/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-emerald-300 transition group block">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Enrolled Students</span>
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Students</span>
                     <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition">
                         <i data-lucide="users" class="w-5 h-5"></i>
                     </div>

@@ -18,6 +18,12 @@ try {
     $courses = $pdo->query("SELECT id, title FROM courses ORDER BY id DESC")->fetchAll();
 } catch (Exception $e) {}
 
+// Fetch active Dailymotion accounts
+$dmAccounts = [];
+try {
+    $dmAccounts = $pdo->query("SELECT id, name, channel_name, uid, is_default FROM dm_accounts WHERE status = 1 ORDER BY is_default DESC, id ASC")->fetchAll();
+} catch (Exception $e) {}
+
 // Fetch chapters for selected course (if any) for filter dropdown
 $filterChapters = [];
 if ($selectedCourseId > 0) {
@@ -28,13 +34,14 @@ if ($selectedCourseId > 0) {
     } catch (Exception $e) {}
 }
 
-// Query videos with Chapter details
+// Query videos with Chapter & DM Account details
 $videos = [];
 try {
-    $sql = "SELECT v.*, c.title AS course_title, ch.title AS chapter_title 
+    $sql = "SELECT v.*, c.title AS course_title, ch.title AS chapter_title, a.name AS dm_account_name, a.channel_name AS dm_channel_name 
             FROM videos v 
             LEFT JOIN courses c ON v.course_id = c.id 
             LEFT JOIN chapters ch ON v.chapter_id = ch.id 
+            LEFT JOIN dm_accounts a ON v.dm_account_id = a.id
             WHERE 1=1";
     $params = [];
     if ($selectedCourseId > 0) {
@@ -164,9 +171,17 @@ try {
                                         <?php endif; ?>
                                     </td>
                                     <td class="py-3.5 px-4">
-                                        <span class="font-mono text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                                            <?= htmlspecialchars($v['dailymotion_id']) ?>
-                                        </span>
+                                        <div class="flex flex-col gap-1 items-start">
+                                            <span class="font-mono text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                                                <?= htmlspecialchars($v['dailymotion_id']) ?>
+                                            </span>
+                                            <?php if (!empty($v['dm_channel_name']) || !empty($v['dm_account_name'])): ?>
+                                                <span class="inline-flex items-center gap-1 text-[10px] font-medium text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-100" title="Connected DM Account">
+                                                    <i data-lucide="cloud" class="w-2.5 h-2.5 text-sky-500"></i>
+                                                    <?= htmlspecialchars($v['dm_channel_name'] ?: $v['dm_account_name']) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                     <td class="py-3.5 px-4">
                                         <span class="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
@@ -250,6 +265,24 @@ try {
                 </div>
                 <select id="video_chapter_id" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
                     <option value="0">-- General (No Specific Chapter) --</option>
+                </select>
+            </div>
+
+            <!-- Dailymotion Account Selection (Multi-Account Support) -->
+            <div>
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Dailymotion Account</label>
+                    <a href="/admin/dm_accounts/" target="_blank" class="text-[10px] text-indigo-600 font-semibold hover:underline flex items-center gap-1">
+                        <i data-lucide="cloud-cog" class="w-3 h-3"></i> Manage Accounts
+                    </a>
+                </div>
+                <select id="video_dm_account_id" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    <option value="0">⚡ Auto-Detect Account (Checks all connected accounts)</option>
+                    <?php foreach ($dmAccounts as $acc): ?>
+                        <option value="<?= $acc['id'] ?>">
+                            <?= htmlspecialchars($acc['name']) ?> (<?= htmlspecialchars($acc['channel_name'] ?: $acc['uid']) ?>)<?= $acc['is_default'] ? ' ★ Default' : '' ?>
+                        </option>
+                    <?php endforeach; ?>
                 </select>
             </div>
 
@@ -406,6 +439,7 @@ try {
         document.getElementById('video_id').value = '0';
         document.getElementById('video_title').value = '';
         document.getElementById('video_dm_id').value = '';
+        document.getElementById('video_dm_account_id').value = '0';
         document.getElementById('video_duration').value = '15:00';
         document.getElementById('video_sort_order').value = '1';
         document.getElementById('video_is_preview').checked = false;
@@ -423,6 +457,7 @@ try {
     function editVideo(v) {
         document.getElementById('video_id').value = v.id;
         document.getElementById('video_course_id').value = v.course_id;
+        document.getElementById('video_dm_account_id').value = v.dm_account_id || 0;
         loadChaptersForCourse(v.course_id, v.chapter_id || 0);
         document.getElementById('video_title').value = v.title || '';
         document.getElementById('video_dm_id').value = v.dailymotion_id || '';
@@ -467,13 +502,18 @@ try {
         statusEl.innerText = 'Connecting to Dailymotion API with owner credentials...';
 
         try {
-            var res = await fetch('/api/admin_crud.php?action=fetch_dm_info&dailymotion_id=' + encodeURIComponent(rawInput));
+            var accId = document.getElementById('video_dm_account_id').value;
+            var res = await fetch('/api/admin_crud.php?action=fetch_dm_info&dailymotion_id=' + encodeURIComponent(rawInput) + '&account_id=' + encodeURIComponent(accId));
             var json = await res.json();
 
             if (json.status && json.data) {
                 var d = json.data;
                 // Auto-fill Clean ID
                 document.getElementById('video_dm_id').value = d.id;
+                // Auto-set Account if detected
+                if (d.account_id) {
+                    document.getElementById('video_dm_account_id').value = d.account_id;
+                }
                 // Auto-fill Title
                 if (d.title) {
                     document.getElementById('video_title').value = d.title;
@@ -490,8 +530,8 @@ try {
                 }
 
                 statusEl.className = 'text-[11px] mt-1.5 text-emerald-600 font-semibold block';
-                statusEl.innerText = '✓ Success! Duration ' + d.duration + ' auto-calculated (' + (d.private ? 'Private Video' : 'Public') + ')';
-                showToast('Video title & duration (' + d.duration + ') auto-calculated!', 'success');
+                statusEl.innerText = '✓ Found in ' + (d.account_name || 'Dailymotion') + ' • Duration ' + d.duration + ' (' + (d.private ? 'Private Video' : 'Public') + ')';
+                showToast('Video title & duration (' + d.duration + ') auto-calculated from ' + (d.account_name || 'Dailymotion'), 'success');
             } else {
                 // Direct client-side fallback if server proxy had network/firewall issue
                 var cleanId = rawInput.trim();
@@ -556,6 +596,7 @@ try {
             id: document.getElementById('video_id').value,
             course_id: document.getElementById('video_course_id').value,
             chapter_id: document.getElementById('video_chapter_id').value,
+            dm_account_id: document.getElementById('video_dm_account_id').value,
             title: document.getElementById('video_title').value,
             dailymotion_id: document.getElementById('video_dm_id').value,
             duration: document.getElementById('video_duration').value,

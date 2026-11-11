@@ -13,6 +13,7 @@ $serverStats = [
     'videos' => 0,
     'categories' => 0,
     'users' => 0,
+    'dm_accounts' => 0,
 ];
 
 try {
@@ -21,6 +22,7 @@ try {
     $serverStats['videos'] = (int)$pdo->query("SELECT COUNT(*) FROM videos")->fetchColumn();
     $serverStats['categories'] = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
     $serverStats['users'] = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $serverStats['dm_accounts'] = (int)$pdo->query("SELECT COUNT(*) FROM dm_accounts WHERE status = 1")->fetchColumn();
 } catch (Exception $e) {
     // fallback if db error
 }
