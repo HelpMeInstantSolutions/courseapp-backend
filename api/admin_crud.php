@@ -217,6 +217,89 @@ switch ($action) {
         sendResponse(true, "Dailymotion account removed successfully.");
         break;
 
+    case 'exchange_dm_code':
+        $rawCodeInput = trim($input['code'] ?? ($_GET['code'] ?? ''));
+        $name = trim($input['name'] ?? '');
+        $clientId = trim($input['client_id'] ?? '2f565bdf5ec09e7464db');
+        $clientSecret = trim($input['client_secret'] ?? '6494629f246182ce9acd3c066a7ab5fae5598a06');
+        $redirectUri = trim($input['redirect_uri'] ?? 'https://insightclasses.in/api');
+
+        if (!$rawCodeInput) {
+            sendResponse(false, "Authorization code or redirected URL is required", null, 400);
+        }
+
+        // Extract code if user pasted full URL (e.g. https://insightclasses.in/api?code=xxxx&...)
+        $code = $rawCodeInput;
+        if (preg_match('/code=([a-zA-Z0-9]+)/', $rawCodeInput, $m)) {
+            $code = $m[1];
+        }
+
+        // Exchange code for tokens via Dailymotion OAuth endpoint
+        $postData = http_build_query([
+            'grant_type' => 'authorization_code',
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'redirect_uri' => $redirectUri,
+            'code' => $code
+        ]);
+
+        $ch = curl_init('https://api.dailymotion.com/oauth/token');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        $res = curl_exec($ch);
+        curl_close($ch);
+
+        $tData = $res ? json_decode($res, true) : null;
+        if (!$tData || empty($tData['access_token']) || empty($tData['refresh_token'])) {
+            $err = $tData['error']['message'] ?? "Failed to exchange authorization code for tokens. The authorization code might have expired (valid for 10 minutes) or has already been used. Please click Authorize again.";
+            sendResponse(false, $err, $tData, 400);
+        }
+
+        $accessToken = $tData['access_token'];
+        $refreshToken = $tData['refresh_token'];
+        $expiresAt = time() + (int)($tData['expires_in'] ?? 36000);
+        $uid = $tData['uid'] ?? '';
+
+        // Query user info to get real channel screenname and email
+        $ch = curl_init("https://api.dailymotion.com/user/me?fields=id,screenname,email");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $accessToken, "Accept: application/json"]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $uRes = curl_exec($ch);
+        curl_close($ch);
+        $uData = $uRes ? json_decode($uRes, true) : null;
+        $channelName = $uData['screenname'] ?? ($name ?: 'Channel');
+        $email = $uData['email'] ?? '';
+        if (!empty($uData['id'])) {
+            $uid = $uData['id'];
+        }
+
+        $accName = $name ?: ($channelName . ' (' . $uid . ')');
+
+        // Insert or update in dm_accounts
+        $stmt = $pdo->prepare("
+            INSERT INTO dm_accounts (name, channel_name, uid, email, client_id, client_secret, refresh_token, access_token, expires_at, is_default, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)
+        ");
+        $stmt->execute([$accName, $channelName, $uid, $email, $clientId, $clientSecret, $refreshToken, $accessToken, $expiresAt]);
+        $accId = $pdo->lastInsertId();
+
+        sendResponse(true, "Successfully connected account '{$channelName}'!", [
+            'id' => $accId,
+            'name' => $accName,
+            'channel_name' => $channelName,
+            'uid' => $uid,
+            'email' => $email,
+            'refresh_token' => $refreshToken
+        ]);
+        break;
+
     case 'stats':
         $totalCourses = $pdo->query("SELECT COUNT(*) FROM courses")->fetchColumn();
         $totalChapters = $pdo->query("SELECT COUNT(*) FROM chapters")->fetchColumn();
@@ -232,18 +315,6 @@ switch ($action) {
             'categories' => $totalCategories,
             'users' => $totalUsers,
             'dm_accounts' => $totalDmAccounts
-        ]);
-        break;
-        $totalVideos = $pdo->query("SELECT COUNT(*) FROM videos")->fetchColumn();
-        $totalCategories = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
-        $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-
-        sendResponse(true, "Stats loaded", [
-            'courses' => $totalCourses,
-            'chapters' => $totalChapters,
-            'videos' => $totalVideos,
-            'categories' => $totalCategories,
-            'users' => $totalUsers
         ]);
         break;
 
