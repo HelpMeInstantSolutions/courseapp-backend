@@ -305,7 +305,17 @@ async function handleChapterSubmit(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const text = await res.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch(pe) {
+            alert('Server error: ' + (text || res.statusText));
+            btn.disabled = false;
+            btn.innerText = 'Save Chapter';
+            return;
+        }
+
         if (data.status) {
             window.location.reload();
         } else {
@@ -314,7 +324,7 @@ async function handleChapterSubmit(e) {
             btn.innerText = 'Save Chapter';
         }
     } catch (err) {
-        alert('Server communication error: ' + err.message);
+        alert('Communication error: ' + err.message);
         btn.disabled = false;
         btn.innerText = 'Save Chapter';
     }

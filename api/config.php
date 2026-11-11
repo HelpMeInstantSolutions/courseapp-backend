@@ -133,6 +133,25 @@ function initDatabase($pdo) {
         }
     } catch (Exception $e) {}
 
+    // Migrations for chapters table
+    try {
+        $chCols = $pdo->query("PRAGMA table_info(chapters)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('status', $chCols)) {
+            $pdo->exec("ALTER TABLE chapters ADD COLUMN status INTEGER DEFAULT 1");
+        }
+        if (!in_array('sort_order', $chCols)) {
+            $pdo->exec("ALTER TABLE chapters ADD COLUMN sort_order INTEGER DEFAULT 1");
+        }
+    } catch (Exception $e) {}
+
+    // Migrations for courses table
+    try {
+        $courseCols = $pdo->query("PRAGMA table_info(courses)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('status', $courseCols)) {
+            $pdo->exec("ALTER TABLE courses ADD COLUMN status INTEGER DEFAULT 1");
+        }
+    } catch (Exception $e) {}
+
     // Seed default Dailymotion account if empty
     try {
         $accCount = $pdo->query("SELECT COUNT(*) FROM dm_accounts")->fetchColumn();
@@ -201,6 +220,90 @@ function sendResponse($status, $message, $data = null, $code = 200) {
 }
 
 /**
+ * Robust HTTP POST helper for Dailymotion API.
+ * Uses native stream context first (bypasses Hostinger CloudFront TCP RST) with cURL fallback.
+ */
+function httpPostDailymotion($url, $postData, $headers = []) {
+    $headerStr = "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nContent-Length: " . strlen($postData) . "\r\n";
+    foreach ($headers as $h) {
+        $headerStr .= $h . "\r\n";
+    }
+
+    $opts = [
+        'http' => [
+            'method' => 'POST',
+            'header' => $headerStr,
+            'content' => $postData,
+            'timeout' => 12,
+            'ignore_errors' => true
+        ],
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false
+        ]
+    ];
+    $ctx = stream_context_create($opts);
+    $res = @file_get_contents($url, false, $ctx);
+
+    if (!$res) {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+        if (!empty($headers)) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        }
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+        $res = curl_exec($ch);
+        curl_close($ch);
+    }
+
+    return $res;
+}
+
+/**
+ * Robust HTTP GET helper for Dailymotion API.
+ */
+function httpGetDailymotion($url, $headers = []) {
+    $headerStr = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nAccept: application/json\r\n";
+    foreach ($headers as $h) {
+        $headerStr .= $h . "\r\n";
+    }
+
+    $opts = [
+        'http' => [
+            'method' => 'GET',
+            'header' => $headerStr,
+            'timeout' => 12,
+            'ignore_errors' => true
+        ],
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false
+        ]
+    ];
+    $ctx = stream_context_create($opts);
+    $res = @file_get_contents($url, false, $ctx);
+
+    if (!$res) {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        if (!empty($headers)) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        }
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+        $res = curl_exec($ch);
+        curl_close($ch);
+    }
+
+    return $res;
+}
+
+/**
  * Retrieve or automatically refresh the Dailymotion Owner Access Token.
  * If expired or within 5 minutes of expiration, refreshes via refresh_token.
  */
@@ -227,37 +330,7 @@ function getDailymotionAccessToken($forceRefresh = false) {
             'refresh_token' => $tokenData['refresh_token']
         ]);
 
-        $res = null;
-
-        // Method 1: file_get_contents native socket stream
-        $opts = [
-            'http' => [
-                'method' => 'POST',
-                'header' => "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: Mozilla/5.0\r\nContent-Length: " . strlen($postData) . "\r\n",
-                'content' => $postData,
-                'timeout' => 12,
-                'ignore_errors' => true
-            ],
-            'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false
-            ]
-        ];
-        $ctx = stream_context_create($opts);
-        $res = @file_get_contents('https://api.dailymotion.com/oauth/token', false, $ctx);
-
-        // Method 2: cURL fallback
-        if (!$res) {
-            $ch = curl_init('https://api.dailymotion.com/oauth/token');
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-            $res = curl_exec($ch);
-            curl_close($ch);
-        }
+        $res = httpPostDailymotion('https://api.dailymotion.com/oauth/token', $postData);
 
         if ($res) {
             $newTokens = json_decode($res, true);
@@ -300,34 +373,7 @@ function refreshDmAccount($pdo, &$account, $forceRefresh = false) {
         'refresh_token' => $account['refresh_token']
     ]);
 
-    $res = null;
-    $opts = [
-        'http' => [
-            'method' => 'POST',
-            'header' => "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: Mozilla/5.0\r\nContent-Length: " . strlen($postData) . "\r\n",
-            'content' => $postData,
-            'timeout' => 12,
-            'ignore_errors' => true
-        ],
-        'ssl' => [
-            'verify_peer' => false,
-            'verify_peer_name' => false
-        ]
-    ];
-    $ctx = stream_context_create($opts);
-    $res = @file_get_contents('https://api.dailymotion.com/oauth/token', false, $ctx);
-
-    if (!$res) {
-        $ch = curl_init('https://api.dailymotion.com/oauth/token');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-        $res = curl_exec($ch);
-        curl_close($ch);
-    }
+    $res = httpPostDailymotion('https://api.dailymotion.com/oauth/token', $postData);
 
     if ($res) {
         $newTokens = json_decode($res, true);

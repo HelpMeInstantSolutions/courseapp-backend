@@ -356,10 +356,11 @@ $oneClickAuthUrl = "https://api.dailymotion.com/oauth/authorize?response_type=co
 
             <!-- Refresh Token -->
             <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Refresh Token *</label>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Refresh Token / Code / URL *</label>
                 <input type="text" id="acc_refresh_token" 
-                       placeholder="e.g. 66e1c1b82878cc7db7c3b3689800eb7b96091b8a" 
+                       placeholder="Paste Refresh Token ya code=... ya browser URL" 
                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                <p class="text-[10px] text-slate-400 mt-1">Note: Aap yahan Refresh Token, ya Authorize code, ya pura browser URL paste kar sakte hain — system auto-exchange kar lega.</p>
             </div>
 
             <!-- Set as Default Account -->
@@ -431,9 +432,11 @@ $oneClickAuthUrl = "https://api.dailymotion.com/oauth/authorize?response_type=co
         document.getElementById('acc_client_secret').value = acc.client_secret || '';
         document.getElementById('acc_refresh_token').value = acc.refresh_token || '';
         document.getElementById('acc_is_default').checked = acc.is_default == 1;
+        document.getElementById('instant_acc_name').value = acc.name || '';
         document.getElementById('modalTitle').innerText = 'Edit Dailymotion Account';
         document.getElementById('accountVerifyStatus').classList.add('hidden');
-        document.getElementById('tabContainer').classList.add('hidden');
+        document.getElementById('instantVerifyStatus').classList.add('hidden');
+        document.getElementById('tabContainer').classList.remove('hidden');
         switchModalTab('manual');
         document.getElementById('accountModal').classList.remove('hidden');
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -447,6 +450,7 @@ $oneClickAuthUrl = "https://api.dailymotion.com/oauth/authorize?response_type=co
     async function handleInstantConnect() {
         var rawInput = document.getElementById('oauth_redirect_input').value.trim();
         var name = document.getElementById('instant_acc_name').value.trim();
+        var accountId = document.getElementById('account_id').value || 0;
         var statusEl = document.getElementById('instantVerifyStatus');
         var btn = document.getElementById('btnInstantConnect');
 
@@ -465,6 +469,7 @@ $oneClickAuthUrl = "https://api.dailymotion.com/oauth/authorize?response_type=co
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    id: accountId,
                     code: rawInput,
                     name: name
                 })

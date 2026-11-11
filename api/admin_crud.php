@@ -8,6 +8,7 @@ session_start();
 $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
 $action = $_GET['action'] ?? ($input['action'] ?? '');
 
+try {
 switch ($action) {
     case 'login':
         $username = trim($input['username'] ?? '');
@@ -107,67 +108,83 @@ switch ($action) {
         $name = trim($input['name'] ?? '');
         $clientId = trim($input['client_id'] ?? '');
         $clientSecret = trim($input['client_secret'] ?? '');
-        $refreshToken = trim($input['refresh_token'] ?? '');
+        $rawTokenInput = trim($input['refresh_token'] ?? '');
         $isDefault = !empty($input['is_default']) ? 1 : 0;
         $status = isset($input['status']) ? (int)$input['status'] : 1;
 
-        if (!$name || !$clientId || !$clientSecret || !$refreshToken) {
-            sendResponse(false, "Account Name, API Key, API Secret, and Refresh Token are all required.", null, 400);
+        if (!$name || !$clientId || !$clientSecret || !$rawTokenInput) {
+            sendResponse(false, "Account Name, API Key, API Secret, and Refresh Token / Code are all required.", null, 400);
         }
 
-        // Test credentials by requesting token
-        $postData = http_build_query([
-            'grant_type' => 'refresh_token',
-            'client_id' => $clientId,
-            'client_secret' => $clientSecret,
-            'refresh_token' => $refreshToken
-        ]);
-
-        $opts = [
-            'http' => [
-                'method' => 'POST',
-                'header' => "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: Mozilla/5.0\r\nContent-Length: " . strlen($postData) . "\r\n",
-                'content' => $postData,
-                'timeout' => 12,
-                'ignore_errors' => true
-            ],
-            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]
-        ];
-        $ctx = stream_context_create($opts);
-        $res = @file_get_contents('https://api.dailymotion.com/oauth/token', false, $ctx);
-
-        if (!$res) {
-            $ch = curl_init('https://api.dailymotion.com/oauth/token');
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-            $res = curl_exec($ch);
-            curl_close($ch);
+        // Auto-detect if user entered a full redirect URL or code
+        $code = null;
+        if (preg_match('/code=([a-zA-Z0-9]+)/', $rawTokenInput, $m)) {
+            $code = $m[1];
         }
 
-        $tData = $res ? json_decode($res, true) : null;
+        $tData = null;
+        $newRefreshToken = $rawTokenInput;
+
+        // 1. If not clearly a code URL, try grant_type=refresh_token first
+        if (!$code) {
+            $postData = http_build_query([
+                'grant_type' => 'refresh_token',
+                'client_id' => $clientId,
+                'client_secret' => $clientSecret,
+                'refresh_token' => $rawTokenInput
+            ]);
+            $res = httpPostDailymotion('https://api.dailymotion.com/oauth/token', $postData);
+            $parsed = $res ? json_decode($res, true) : null;
+            if ($parsed && !empty($parsed['access_token'])) {
+                $tData = $parsed;
+            }
+        }
+
+        // 2. If refresh_token failed or was a code, try exchanging as authorization_code
         if (!$tData || empty($tData['access_token'])) {
-            $err = $tData['error']['message'] ?? "Failed to connect to Dailymotion. Please verify your API Key, Secret, and Refresh Token.";
+            $authCode = $code ?: $rawTokenInput;
+            $candidateUris = [];
+            if (strpos($rawTokenInput, '?') !== false) {
+                $detected = explode('?', $rawTokenInput)[0];
+                $candidateUris[] = $detected;
+                $candidateUris[] = rtrim($detected, '/');
+                $candidateUris[] = rtrim($detected, '/') . '/';
+            }
+            $candidateUris[] = 'https://insightclasses.in/api';
+            $candidateUris[] = 'https://insightclasses.in/api/';
+            $candidateUris[] = 'https://courseapp.mybhiwani.in/api/';
+            $candidateUris[] = 'https://courseapp.mybhiwani.in/api';
+            $candidateUris = array_values(array_unique($candidateUris));
+
+            foreach ($candidateUris as $curUri) {
+                $postData = http_build_query([
+                    'grant_type' => 'authorization_code',
+                    'client_id' => $clientId,
+                    'client_secret' => $clientSecret,
+                    'redirect_uri' => $curUri,
+                    'code' => $authCode
+                ]);
+                $cRes = httpPostDailymotion('https://api.dailymotion.com/oauth/token', $postData);
+                $cData = $cRes ? json_decode($cRes, true) : null;
+                if ($cData && !empty($cData['access_token'])) {
+                    $tData = $cData;
+                    break;
+                }
+            }
+        }
+
+        if (!$tData || empty($tData['access_token'])) {
+            $err = $tData['error']['message'] ?? $tData['error_description'] ?? "Failed to connect to Dailymotion. Please verify your API Key, Secret, and Refresh Token / Code.";
             sendResponse(false, $err, $tData, 400);
         }
 
         $accessToken = $tData['access_token'];
         $expiresAt = time() + (int)($tData['expires_in'] ?? 36000);
-        $newRefreshToken = $tData['refresh_token'] ?? $refreshToken;
+        $newRefreshToken = $tData['refresh_token'] ?? $rawTokenInput;
         $uid = $tData['uid'] ?? '';
 
         // Query user info to get real channel name and email
-        $ch = curl_init("https://api.dailymotion.com/user/me?fields=id,screenname,email");
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $accessToken, "Accept: application/json"]);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        $uRes = curl_exec($ch);
-        curl_close($ch);
+        $uRes = httpGetDailymotion("https://api.dailymotion.com/user/me?fields=id,screenname,email", ["Authorization: Bearer " . $accessToken]);
         $uData = $uRes ? json_decode($uRes, true) : null;
         $channelName = $uData['screenname'] ?? $name;
         $email = $uData['email'] ?? '';
@@ -234,6 +251,7 @@ switch ($action) {
         break;
 
     case 'exchange_dm_code':
+        $id = (int)($input['id'] ?? 0);
         $rawCodeInput = trim($input['code'] ?? ($_GET['code'] ?? ''));
         $name = trim($input['name'] ?? '');
         $clientId = trim($input['client_id'] ?? '2f565bdf5ec09e7464db');
@@ -277,16 +295,7 @@ switch ($action) {
                 'code' => $code
             ]);
 
-            $ch = curl_init('https://api.dailymotion.com/oauth/token');
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-            $res = curl_exec($ch);
-            curl_close($ch);
-
+            $res = httpPostDailymotion('https://api.dailymotion.com/oauth/token', $postData);
             $parsed = $res ? json_decode($res, true) : null;
             if ($parsed && !empty($parsed['access_token'])) {
                 $tData = $parsed;
@@ -308,14 +317,7 @@ switch ($action) {
         $uid = $tData['uid'] ?? '';
 
         // Query user info to get real channel screenname and email
-        $ch = curl_init("https://api.dailymotion.com/user/me?fields=id,screenname,email");
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $accessToken, "Accept: application/json"]);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        $uRes = curl_exec($ch);
-        curl_close($ch);
+        $uRes = httpGetDailymotion("https://api.dailymotion.com/user/me?fields=id,screenname,email", ["Authorization: Bearer " . $accessToken]);
         $uData = $uRes ? json_decode($uRes, true) : null;
         $channelName = $uData['screenname'] ?? ($name ?: 'Channel');
         $email = $uData['email'] ?? '';
@@ -325,39 +327,29 @@ switch ($action) {
 
         $accName = $name ?: ($channelName . ' (' . $uid . ')');
 
-        // Insert or update in dm_accounts
-        $stmt = $pdo->prepare("
-            INSERT INTO dm_accounts (name, channel_name, uid, email, client_id, client_secret, refresh_token, access_token, expires_at, is_default, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)
-        ");
-        $stmt->execute([$accName, $channelName, $uid, $email, $clientId, $clientSecret, $refreshToken, $accessToken, $expiresAt]);
-        $accId = $pdo->lastInsertId();
-
-        sendResponse(true, "Successfully connected account '{$channelName}'!", [
-            'id' => $accId,
-            'name' => $accName,
-            'channel_name' => $channelName,
-            'uid' => $uid,
-            'email' => $email,
-            'refresh_token' => $refreshToken
-        ]);
-        break;
-        $uData = $uRes ? json_decode($uRes, true) : null;
-        $channelName = $uData['screenname'] ?? ($name ?: 'Channel');
-        $email = $uData['email'] ?? '';
-        if (!empty($uData['id'])) {
-            $uid = $uData['id'];
+        // Check if account already exists with this uid or client_id or updating specific id
+        $existingId = $id > 0 ? $id : 0;
+        if (!$existingId) {
+            $checkStmt = $pdo->prepare("SELECT id FROM dm_accounts WHERE uid = ? OR (client_id = ? AND client_id != '2f565bdf5ec09e7464db')");
+            $checkStmt->execute([$uid, $clientId]);
+            $existingId = (int)$checkStmt->fetchColumn();
         }
 
-        $accName = $name ?: ($channelName . ' (' . $uid . ')');
-
-        // Insert or update in dm_accounts
-        $stmt = $pdo->prepare("
-            INSERT INTO dm_accounts (name, channel_name, uid, email, client_id, client_secret, refresh_token, access_token, expires_at, is_default, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)
-        ");
-        $stmt->execute([$accName, $channelName, $uid, $email, $clientId, $clientSecret, $refreshToken, $accessToken, $expiresAt]);
-        $accId = $pdo->lastInsertId();
+        if ($existingId) {
+            $stmt = $pdo->prepare("
+                UPDATE dm_accounts SET name = ?, channel_name = ?, uid = ?, email = ?, client_id = ?, client_secret = ?, refresh_token = ?, access_token = ?, expires_at = ?, status = 1
+                WHERE id = ?
+            ");
+            $stmt->execute([$accName, $channelName, $uid, $email, $clientId, $clientSecret, $refreshToken, $accessToken, $expiresAt, $existingId]);
+            $accId = $existingId;
+        } else {
+            $stmt = $pdo->prepare("
+                INSERT INTO dm_accounts (name, channel_name, uid, email, client_id, client_secret, refresh_token, access_token, expires_at, is_default, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)
+            ");
+            $stmt->execute([$accName, $channelName, $uid, $email, $clientId, $clientSecret, $refreshToken, $accessToken, $expiresAt]);
+            $accId = $pdo->lastInsertId();
+        }
 
         sendResponse(true, "Successfully connected account '{$channelName}'!", [
             'id' => $accId,
@@ -416,7 +408,15 @@ switch ($action) {
         $sortOrder = (int)($input['sort_order'] ?? 1);
 
         if ($courseId <= 0 || empty($title)) {
-            sendResponse(false, "Course and Chapter Title are required", null, 400);
+            sendResponse(false, "Course selection and Chapter Title are required.", null, 400);
+        }
+
+        // Verify that course exists
+        $courseCheck = $pdo->prepare("SELECT id, title FROM courses WHERE id = ?");
+        $courseCheck->execute([$courseId]);
+        $existingCourse = $courseCheck->fetch();
+        if (!$existingCourse) {
+            sendResponse(false, "Selected Course (ID #{$courseId}) does not exist. Please select or create an existing course first.", null, 400);
         }
 
         if ($id > 0) {
@@ -424,7 +424,7 @@ switch ($action) {
             $stmt->execute([$courseId, $title, $description, $sortOrder, $id]);
             sendResponse(true, "Chapter updated successfully!");
         } else {
-            $stmt = $pdo->prepare("INSERT INTO chapters (course_id, title, description, sort_order) VALUES (?, ?, ?, ?)");
+            $stmt = $pdo->prepare("INSERT INTO chapters (course_id, title, description, sort_order, status) VALUES (?, ?, ?, ?, 1)");
             $stmt->execute([$courseId, $title, $description, $sortOrder]);
             sendResponse(true, "New Chapter created successfully!");
         }
@@ -453,6 +453,16 @@ switch ($action) {
         $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
         $stmt->execute([$userId]);
         sendResponse(true, "Student account deleted successfully!");
+        break;
+
+    case 'list_courses':
+        $stmt = $pdo->query("SELECT c.*, cat.title as category_name, 
+                             (SELECT COUNT(*) FROM chapters ch WHERE ch.course_id = c.id) as total_chapters,
+                             (SELECT COUNT(*) FROM videos v WHERE v.course_id = c.id) as total_videos 
+                             FROM courses c 
+                             LEFT JOIN categories cat ON c.category_id = cat.id 
+                             ORDER BY c.id DESC");
+        sendResponse(true, "Courses retrieved successfully", $stmt->fetchAll());
         break;
 
     case 'save_course':
@@ -538,4 +548,10 @@ switch ($action) {
     default:
         sendResponse(false, "Invalid admin action", null, 400);
         break;
+}
+} catch (Throwable $e) {
+    sendResponse(false, "Server Error: " . $e->getMessage(), [
+        'file' => basename($e->getFile()),
+        'line' => $e->getLine()
+    ], 500);
 }
