@@ -461,24 +461,8 @@ function findDmAccountForVideo($pdo, $videoId, $preferredAccountId = 0) {
 
     $queryOne = function($vid, $token) {
         $url = "https://api.dailymotion.com/video/" . $vid . "?fields=id,title,duration,thumbnail_url,private,embed_url";
-        $headers = "User-Agent: Mozilla/5.0\r\nAccept: application/json\r\n";
-        if ($token) $headers .= "Authorization: Bearer " . $token . "\r\n";
-        $ctx = stream_context_create([
-            'http' => ['method' => 'GET', 'header' => $headers, 'timeout' => 8, 'ignore_errors' => true],
-            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]
-        ]);
-        $res = @file_get_contents($url, false, $ctx);
-        if (!$res) {
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0");
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 8);
-            if ($token) curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $token, "Accept: application/json"]);
-            $res = curl_exec($ch);
-            curl_close($ch);
-        }
+        $headers = $token ? ["Authorization: Bearer " . $token] : [];
+        $res = httpGetDailymotion($url, $headers);
         return $res ? json_decode($res, true) : null;
     };
 
