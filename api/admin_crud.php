@@ -56,19 +56,32 @@ switch ($action) {
             $url = "https://api.dailymotion.com/video/" . $videoId . "?fields=id,title,duration,thumbnail_url,private";
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-            $headers = [];
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            $headers = [
+                "Accept: application/json",
+            ];
             if ($bearer) {
                 $headers[] = "Authorization: Bearer " . $bearer;
             }
-            if (!empty($headers)) {
-                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            }
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             $res = curl_exec($ch);
+            $curlErr = curl_error($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
-            return $res ? json_decode($res, true) : null;
+
+            $decoded = $res ? json_decode($res, true) : null;
+            if (!$decoded) {
+                return [
+                    '_raw' => $res,
+                    '_curl_err' => $curlErr,
+                    '_http_code' => $httpCode,
+                    '_bearer_len' => $bearer ? strlen($bearer) : 0
+                ];
+            }
+            return $decoded;
         };
 
         $json = $queryDm($dmId, $token);
@@ -113,8 +126,8 @@ switch ($action) {
                 'private' => $json['private'] ?? false
             ]);
         } else {
-            $err = $json['error']['message'] ?? "Video not found on Dailymotion. Please verify ID or URL.";
-            sendResponse(false, $err, null, 404);
+            $err = $json['error']['message'] ?? (!empty($json['_curl_err']) ? $json['_curl_err'] : "Video not found on Dailymotion. Please verify ID or URL.");
+            sendResponse(false, $err, $json, 404);
         }
         break;
 
