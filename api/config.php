@@ -78,9 +78,21 @@ function initDatabase($pdo) {
             FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
         );
 
+        CREATE TABLE IF NOT EXISTS chapters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            course_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            sort_order INTEGER DEFAULT 1,
+            status INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             course_id INTEGER NOT NULL,
+            chapter_id INTEGER DEFAULT 0,
             title TEXT NOT NULL,
             description TEXT,
             dailymotion_id TEXT NOT NULL,
@@ -92,6 +104,14 @@ function initDatabase($pdo) {
             FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
         );
     ");
+
+    // Migration: add chapter_id to videos if missing
+    try {
+        $videoCols = $pdo->query("PRAGMA table_info(videos)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('chapter_id', $videoCols)) {
+            $pdo->exec("ALTER TABLE videos ADD COLUMN chapter_id INTEGER DEFAULT 0");
+        }
+    } catch (Exception $e) {}
 
     // Ensure admin user exists with password 'admin'
     $adminPwd = password_hash('admin', PASSWORD_BCRYPT);

@@ -8,10 +8,11 @@ $headerSubtitle = 'Create, organize and manage video courses for the Android app
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/sidebar.php';
 
-// Fetch all courses with video counts
+// Fetch all courses with video & chapter counts
 $courses = [];
 try {
     $stmt = $pdo->query("SELECT c.*, 
+                         (SELECT COUNT(*) FROM chapters ch WHERE ch.course_id = c.id) AS chapter_count,
                          (SELECT COUNT(*) FROM videos v WHERE v.course_id = c.id) AS video_count,
                          cat.title AS category_name
                          FROM courses c 
@@ -90,12 +91,27 @@ try {
                             </div>
 
                             <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
-                                    <i data-lucide="video" class="w-3.5 h-3.5 text-indigo-500"></i>
-                                    <span><?= $c['video_count'] ?> Video Lessons</span>
-                                </span>
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <a href="/admin/chapters/?course_id=<?= $c['id'] ?>" 
+                                       title="View Chapters"
+                                       class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-100/60 transition">
+                                        <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-500"></i>
+                                        <span><?= (int)($c['chapter_count'] ?? 0) ?> Chapters</span>
+                                    </a>
+                                    <a href="/admin/videos/?course_id=<?= $c['id'] ?>" 
+                                       title="View Videos"
+                                       class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition">
+                                        <i data-lucide="video" class="w-3.5 h-3.5 text-slate-500"></i>
+                                        <span><?= (int)$c['video_count'] ?> Videos</span>
+                                    </a>
+                                </div>
 
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-1">
+                                    <a href="/admin/chapters/?course_id=<?= $c['id'] ?>" 
+                                       title="Manage Chapters" 
+                                       class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
+                                        <i data-lucide="layers" class="w-4 h-4"></i>
+                                    </a>
                                     <a href="/admin/videos/?course_id=<?= $c['id'] ?>" 
                                        title="Manage Lessons" 
                                        class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition">

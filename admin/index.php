@@ -57,7 +57,23 @@ try {
                 </div>
             </a>
 
-            <!-- Card 2: Videos -->
+            <!-- Card 2: Chapters (Course -> Chapter -> Video) -->
+            <a href="/admin/chapters/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300 transition group block">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Course Chapters</span>
+                    <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition">
+                        <i data-lucide="layers" class="w-5 h-5"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span class="text-3xl font-extrabold text-slate-900"><?= $serverStats['chapters'] ?? 0 ?></span>
+                    <span class="text-xs font-semibold text-indigo-600 flex items-center gap-0.5">
+                        Chapters <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                    </span>
+                </div>
+            </a>
+
+            <!-- Card 3: Videos -->
             <a href="/admin/videos/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-300 transition group block">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Video Lessons</span>
@@ -73,7 +89,7 @@ try {
                 </div>
             </a>
 
-            <!-- Card 3: Students -->
+            <!-- Card 4: Students -->
             <a href="/admin/users/" class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-emerald-300 transition group block">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Enrolled Students</span>
@@ -88,21 +104,6 @@ try {
                     </span>
                 </div>
             </a>
-
-            <!-- Card 4: Status -->
-            <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Private Streams</span>
-                    <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                        <i data-lucide="shield-check" class="w-5 h-5"></i>
-                    </div>
-                </div>
-                <div class="mt-4 flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="text-sm font-bold text-slate-800">OAuth Connected</span>
-                </div>
-                <p class="text-[11px] text-slate-400 mt-1">UID: x2q3pq9 (Insight Classes)</p>
-            </div>
         </div>
 
         <!-- Quick Course Shortcuts Grid -->

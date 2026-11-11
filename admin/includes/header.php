@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../api/config.php';
 // Server-side database counts for instant display
 $serverStats = [
     'courses' => 0,
+    'chapters' => 0,
     'videos' => 0,
     'categories' => 0,
     'users' => 0,
@@ -16,6 +17,7 @@ $serverStats = [
 
 try {
     $serverStats['courses'] = (int)$pdo->query("SELECT COUNT(*) FROM courses")->fetchColumn();
+    $serverStats['chapters'] = (int)$pdo->query("SELECT COUNT(*) FROM chapters")->fetchColumn();
     $serverStats['videos'] = (int)$pdo->query("SELECT COUNT(*) FROM videos")->fetchColumn();
     $serverStats['categories'] = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
     $serverStats['users'] = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();

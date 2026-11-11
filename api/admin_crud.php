@@ -101,16 +101,72 @@ switch ($action) {
 
     case 'stats':
         $totalCourses = $pdo->query("SELECT COUNT(*) FROM courses")->fetchColumn();
+        $totalChapters = $pdo->query("SELECT COUNT(*) FROM chapters")->fetchColumn();
         $totalVideos = $pdo->query("SELECT COUNT(*) FROM videos")->fetchColumn();
         $totalCategories = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
         $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
 
         sendResponse(true, "Stats loaded", [
             'courses' => $totalCourses,
+            'chapters' => $totalChapters,
             'videos' => $totalVideos,
             'categories' => $totalCategories,
             'users' => $totalUsers
         ]);
+        break;
+
+    case 'list_chapters':
+        $courseId = (int)($input['course_id'] ?? ($_GET['course_id'] ?? 0));
+        if ($courseId > 0) {
+            $stmt = $pdo->prepare("SELECT ch.*, c.title as course_title,
+                                   (SELECT COUNT(*) FROM videos v WHERE v.chapter_id = ch.id) as video_count 
+                                   FROM chapters ch 
+                                   LEFT JOIN courses c ON ch.course_id = c.id 
+                                   WHERE ch.course_id = ? 
+                                   ORDER BY ch.sort_order ASC, ch.id ASC");
+            $stmt->execute([$courseId]);
+        } else {
+            $stmt = $pdo->query("SELECT ch.*, c.title as course_title,
+                                 (SELECT COUNT(*) FROM videos v WHERE v.chapter_id = ch.id) as video_count 
+                                 FROM chapters ch 
+                                 LEFT JOIN courses c ON ch.course_id = c.id 
+                                 ORDER BY ch.course_id DESC, ch.sort_order ASC");
+        }
+        $chapters = $stmt->fetchAll();
+        sendResponse(true, "Chapters retrieved successfully", $chapters);
+        break;
+
+    case 'save_chapter':
+        $id = (int)($input['id'] ?? 0);
+        $courseId = (int)($input['course_id'] ?? 0);
+        $title = trim($input['title'] ?? '');
+        $description = trim($input['description'] ?? '');
+        $sortOrder = (int)($input['sort_order'] ?? 1);
+
+        if ($courseId <= 0 || empty($title)) {
+            sendResponse(false, "Course and Chapter Title are required", null, 400);
+        }
+
+        if ($id > 0) {
+            $stmt = $pdo->prepare("UPDATE chapters SET course_id = ?, title = ?, description = ?, sort_order = ? WHERE id = ?");
+            $stmt->execute([$courseId, $title, $description, $sortOrder, $id]);
+            sendResponse(true, "Chapter updated successfully!");
+        } else {
+            $stmt = $pdo->prepare("INSERT INTO chapters (course_id, title, description, sort_order) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$courseId, $title, $description, $sortOrder]);
+            sendResponse(true, "New Chapter created successfully!");
+        }
+        break;
+
+    case 'delete_chapter':
+        $id = (int)($input['id'] ?? 0);
+        if ($id <= 0) sendResponse(false, "Invalid Chapter ID", null, 400);
+
+        // Reset chapter_id on attached videos to 0 (or unassigned)
+        $pdo->prepare("UPDATE videos SET chapter_id = 0 WHERE chapter_id = ?")->execute([$id]);
+        $stmt = $pdo->prepare("DELETE FROM chapters WHERE id = ?");
+        $stmt->execute([$id]);
+        sendResponse(true, "Chapter deleted successfully!");
         break;
 
     case 'list_users':
@@ -162,6 +218,7 @@ switch ($action) {
     case 'save_video':
         $id = (int)($input['id'] ?? 0);
         $courseId = (int)($input['course_id'] ?? 0);
+        $chapterId = (int)($input['chapter_id'] ?? 0);
         $title = trim($input['title'] ?? '');
         $dmId = trim($input['dailymotion_id'] ?? '');
         $duration = trim($input['duration'] ?? '15:00');
@@ -178,12 +235,12 @@ switch ($action) {
         }
 
         if ($id > 0) {
-            $stmt = $pdo->prepare("UPDATE videos SET course_id = ?, title = ?, dailymotion_id = ?, duration = ?, is_free_preview = ?, sort_order = ? WHERE id = ?");
-            $stmt->execute([$courseId, $title, $dmId, $duration, $isPreview, $sortOrder, $id]);
+            $stmt = $pdo->prepare("UPDATE videos SET course_id = ?, chapter_id = ?, title = ?, dailymotion_id = ?, duration = ?, is_free_preview = ?, sort_order = ? WHERE id = ?");
+            $stmt->execute([$courseId, $chapterId, $title, $dmId, $duration, $isPreview, $sortOrder, $id]);
             sendResponse(true, "Lesson video updated successfully!");
         } else {
-            $stmt = $pdo->prepare("INSERT INTO videos (course_id, title, dailymotion_id, duration, is_free_preview, sort_order) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$courseId, $title, $dmId, $duration, $isPreview, $sortOrder]);
+            $stmt = $pdo->prepare("INSERT INTO videos (course_id, chapter_id, title, dailymotion_id, duration, is_free_preview, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$courseId, $chapterId, $title, $dmId, $duration, $isPreview, $sortOrder]);
             sendResponse(true, "Lesson video added successfully!");
         }
         break;

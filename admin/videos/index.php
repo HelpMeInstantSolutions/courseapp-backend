@@ -10,6 +10,7 @@ require_once __DIR__ . '/../includes/sidebar.php';
 
 // Filter by course if selected
 $selectedCourseId = (int)($_GET['course_id'] ?? 0);
+$selectedChapterId = (int)($_GET['chapter_id'] ?? 0);
 
 // Fetch all courses for dropdown and filtering
 $courses = [];
@@ -17,22 +18,37 @@ try {
     $courses = $pdo->query("SELECT id, title FROM courses ORDER BY id DESC")->fetchAll();
 } catch (Exception $e) {}
 
-// Query videos
+// Fetch chapters for selected course (if any) for filter dropdown
+$filterChapters = [];
+if ($selectedCourseId > 0) {
+    try {
+        $chStmt = $pdo->prepare("SELECT id, title FROM chapters WHERE course_id = ? ORDER BY sort_order ASC, id ASC");
+        $chStmt->execute([$selectedCourseId]);
+        $filterChapters = $chStmt->fetchAll();
+    } catch (Exception $e) {}
+}
+
+// Query videos with Chapter details
 $videos = [];
 try {
+    $sql = "SELECT v.*, c.title AS course_title, ch.title AS chapter_title 
+            FROM videos v 
+            LEFT JOIN courses c ON v.course_id = c.id 
+            LEFT JOIN chapters ch ON v.chapter_id = ch.id 
+            WHERE 1=1";
+    $params = [];
     if ($selectedCourseId > 0) {
-        $stmt = $pdo->prepare("SELECT v.*, c.title AS course_title 
-                               FROM videos v 
-                               LEFT JOIN courses c ON v.course_id = c.id 
-                               WHERE v.course_id = ? 
-                               ORDER BY v.sort_order ASC, v.id DESC");
-        $stmt->execute([$selectedCourseId]);
-    } else {
-        $stmt = $pdo->query("SELECT v.*, c.title AS course_title 
-                             FROM videos v 
-                             LEFT JOIN courses c ON v.course_id = c.id 
-                             ORDER BY v.id DESC");
+        $sql .= " AND v.course_id = ?";
+        $params[] = $selectedCourseId;
     }
+    if ($selectedChapterId > 0) {
+        $sql .= " AND v.chapter_id = ?";
+        $params[] = $selectedChapterId;
+    }
+    $sql .= " ORDER BY v.sort_order ASC, v.id DESC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     $videos = $stmt->fetchAll();
 } catch (Exception $e) {}
 ?>
@@ -56,13 +72,26 @@ try {
                 <!-- Course Filter Dropdown -->
                 <select id="courseFilter" onchange="applyCourseFilter(this.value)" 
                         class="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
-                    <option value="0">All Courses (<?= $serverStats['videos'] ?>)</option>
+                    <option value="0">All Courses</option>
                     <?php foreach ($courses as $c): ?>
                         <option value="<?= $c['id'] ?>" <?= $selectedCourseId == $c['id'] ? 'selected' : '' ?>>
                             <?= htmlspecialchars($c['title']) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
+
+                <!-- Chapter Filter Dropdown (visible when course is selected) -->
+                <?php if ($selectedCourseId > 0 && !empty($filterChapters)): ?>
+                    <select id="chapterFilter" onchange="applyChapterFilter(this.value)" 
+                            class="px-3.5 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-medium text-indigo-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                        <option value="0">All Chapters (<?= count($videos) ?>)</option>
+                        <?php foreach ($filterChapters as $ch): ?>
+                            <option value="<?= $ch['id'] ?>" <?= $selectedChapterId == $ch['id'] ? 'selected' : '' ?>>
+                                📁 <?= htmlspecialchars($ch['title']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php endif; ?>
             </div>
 
             <!-- Add Video Button -->
@@ -82,6 +111,7 @@ try {
                             <th class="py-3.5 px-4 w-12 text-center">#</th>
                             <th class="py-3.5 px-4">Lesson Details</th>
                             <th class="py-3.5 px-4">Course</th>
+                            <th class="py-3.5 px-4">Chapter</th>
                             <th class="py-3.5 px-4">Dailymotion ID</th>
                             <th class="py-3.5 px-4">Duration</th>
                             <th class="py-3.5 px-4">Access Type</th>
@@ -91,7 +121,7 @@ try {
                     <tbody class="divide-y divide-slate-100 font-medium">
                         <?php if (empty($videos)): ?>
                             <tr>
-                                <td colspan="7" class="py-12 text-center text-slate-400">
+                                <td colspan="8" class="py-12 text-center text-slate-400">
                                     <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-3">
                                         <i data-lucide="video-off" class="w-6 h-6"></i>
                                     </div>
@@ -122,6 +152,16 @@ try {
                                         <span class="px-2 py-1 rounded-md bg-slate-100 text-slate-700 font-medium text-[11px]">
                                             <?= htmlspecialchars($v['course_title'] ?? 'General') ?>
                                         </span>
+                                    </td>
+                                    <td class="py-3.5 px-4 text-slate-600 truncate max-w-[140px]">
+                                        <?php if (!empty($v['chapter_title'])): ?>
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-semibold text-[11px] border border-indigo-100/60">
+                                                <i data-lucide="layers" class="w-3 h-3 text-indigo-500"></i>
+                                                <?= htmlspecialchars($v['chapter_title']) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-slate-400 text-[11px] italic">No chapter</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="py-3.5 px-4">
                                         <span class="font-mono text-[11px] font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
@@ -190,12 +230,26 @@ try {
             <!-- Course Selection -->
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Assign To Course *</label>
-                <select id="video_course_id" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                <select id="video_course_id" onchange="onCourseChanged(this.value)" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    <option value="">-- Choose Course --</option>
                     <?php foreach ($courses as $c): ?>
                         <option value="<?= $c['id'] ?>" <?= $selectedCourseId == $c['id'] ? 'selected' : '' ?>>
                             <?= htmlspecialchars($c['title']) ?>
                         </option>
                     <?php endforeach; ?>
+                </select>
+            </div>
+
+            <!-- Chapter Selection (Course -> Chapter -> Video) -->
+            <div>
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Assign To Chapter</label>
+                    <a href="/admin/chapters/" target="_blank" class="text-[10px] text-indigo-600 font-semibold hover:underline flex items-center gap-1">
+                        <i data-lucide="layers" class="w-3 h-3"></i> Manage Chapters
+                    </a>
+                </div>
+                <select id="video_chapter_id" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    <option value="0">-- General (No Specific Chapter) --</option>
                 </select>
             </div>
 
@@ -317,6 +371,37 @@ try {
         }
     }
 
+    function applyChapterFilter(chapterId) {
+        var courseId = document.getElementById('courseFilter').value;
+        var url = '/admin/videos/?';
+        if (courseId > 0) url += 'course_id=' + courseId;
+        if (chapterId > 0) url += (courseId > 0 ? '&' : '') + 'chapter_id=' + chapterId;
+        window.location.href = url;
+    }
+
+    async function loadChaptersForCourse(courseId, selectedChapterId = 0) {
+        var select = document.getElementById('video_chapter_id');
+        select.innerHTML = '<option value="0">-- General (No Specific Chapter) --</option>';
+        if (!courseId || courseId <= 0) return;
+        try {
+            var res = await fetch('/api/admin_crud.php?action=list_chapters&course_id=' + courseId);
+            var json = await res.json();
+            if (json.status && json.data) {
+                json.data.forEach(function(ch) {
+                    var opt = document.createElement('option');
+                    opt.value = ch.id;
+                    opt.textContent = ch.title;
+                    if (ch.id == selectedChapterId) opt.selected = true;
+                    select.appendChild(opt);
+                });
+            }
+        } catch (e) {}
+    }
+
+    function onCourseChanged(courseId) {
+        loadChaptersForCourse(courseId, 0);
+    }
+
     function openVideoModal() {
         document.getElementById('video_id').value = '0';
         document.getElementById('video_title').value = '';
@@ -327,6 +412,10 @@ try {
         document.getElementById('videoModalTitle').innerText = 'Add Video Lesson';
         document.getElementById('thumbPreviewBox').classList.add('hidden');
         document.getElementById('dmFetchStatus').classList.add('hidden');
+
+        var currentCourse = document.getElementById('video_course_id').value;
+        loadChaptersForCourse(currentCourse, <?= $selectedChapterId ?>);
+
         document.getElementById('videoModal').classList.remove('hidden');
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
@@ -334,6 +423,7 @@ try {
     function editVideo(v) {
         document.getElementById('video_id').value = v.id;
         document.getElementById('video_course_id').value = v.course_id;
+        loadChaptersForCourse(v.course_id, v.chapter_id || 0);
         document.getElementById('video_title').value = v.title || '';
         document.getElementById('video_dm_id').value = v.dailymotion_id || '';
         document.getElementById('video_duration').value = v.duration || '15:00';
@@ -427,6 +517,7 @@ try {
         var payload = {
             id: document.getElementById('video_id').value,
             course_id: document.getElementById('video_course_id').value,
+            chapter_id: document.getElementById('video_chapter_id').value,
             title: document.getElementById('video_title').value,
             dailymotion_id: document.getElementById('video_dm_id').value,
             duration: document.getElementById('video_duration').value,
@@ -503,7 +594,18 @@ try {
 
     // Auto open modal if ?new=1
     if (window.location.search.includes('new=1')) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlCourseId = urlParams.get('course_id');
+        const urlChId = urlParams.get('chapter_id');
+        if (urlCourseId) {
+            document.getElementById('video_course_id').value = urlCourseId;
+        }
         openVideoModal();
+        if (urlCourseId && urlChId) {
+            setTimeout(() => {
+                loadChaptersForCourse(urlCourseId, urlChId);
+            }, 150);
+        }
     }
 </script>
 
