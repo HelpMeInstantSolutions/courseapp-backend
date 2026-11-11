@@ -122,15 +122,31 @@ switch ($action) {
             'client_secret' => $clientSecret,
             'refresh_token' => $refreshToken
         ]);
-        $ch = curl_init('https://api.dailymotion.com/oauth/token');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-        $res = curl_exec($ch);
-        curl_close($ch);
+
+        $opts = [
+            'http' => [
+                'method' => 'POST',
+                'header' => "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: Mozilla/5.0\r\nContent-Length: " . strlen($postData) . "\r\n",
+                'content' => $postData,
+                'timeout' => 12,
+                'ignore_errors' => true
+            ],
+            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]
+        ];
+        $ctx = stream_context_create($opts);
+        $res = @file_get_contents('https://api.dailymotion.com/oauth/token', false, $ctx);
+
+        if (!$res) {
+            $ch = curl_init('https://api.dailymotion.com/oauth/token');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+            $res = curl_exec($ch);
+            curl_close($ch);
+        }
 
         $tData = $res ? json_decode($res, true) : null;
         if (!$tData || empty($tData['access_token'])) {
