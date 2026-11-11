@@ -493,6 +493,44 @@ try {
                 statusEl.innerText = '✓ Success! Duration ' + d.duration + ' auto-calculated (' + (d.private ? 'Private Video' : 'Public') + ')';
                 showToast('Video title & duration (' + d.duration + ') auto-calculated!', 'success');
             } else {
+                // Direct client-side fallback if server proxy had network/firewall issue
+                var cleanId = rawInput.trim();
+                var m = cleanId.match(/(?:dailymotion\.com\/(?:video|hub)\/|dai\.ly\/)([a-zA-Z0-9]+)/);
+                if (m) cleanId = m[1];
+                var token = (json && json.data && json.data._token) ? json.data._token : '';
+
+                statusEl.innerText = 'Server proxy busy, trying direct browser connection...';
+                try {
+                    var dHeaders = { 'Accept': 'application/json' };
+                    if (token) dHeaders['Authorization'] = 'Bearer ' + token;
+                    var dRes = await fetch('https://api.dailymotion.com/video/' + cleanId + '?fields=id,title,duration,thumbnail_url,private', {
+                        headers: dHeaders
+                    });
+                    var dJson = await dRes.json();
+                    if (dJson && dJson.id) {
+                        var secs = parseInt(dJson.duration || 0);
+                        var hrs = Math.floor(secs / 3600);
+                        var mins = Math.floor((secs % 3600) / 60);
+                        var s = secs % 60;
+                        var fmt = (hrs > 0 ? String(hrs).padStart(2,'0') + ':' : '') + String(mins).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+
+                        document.getElementById('video_dm_id').value = dJson.id;
+                        if (dJson.title) document.getElementById('video_title').value = dJson.title;
+                        document.getElementById('video_duration').value = fmt;
+                        if (dJson.thumbnail_url) {
+                            document.getElementById('thumbImg').src = dJson.thumbnail_url;
+                            document.getElementById('thumbTextTitle').innerText = dJson.title || dJson.id;
+                            document.getElementById('thumbPreviewBox').classList.remove('hidden');
+                        }
+                        statusEl.className = 'text-[11px] mt-1.5 text-emerald-600 font-semibold block';
+                        statusEl.innerText = '✓ Success! Duration ' + fmt + ' auto-calculated (' + (dJson.private ? 'Private' : 'Public') + ')';
+                        showToast('Video title & duration (' + fmt + ') auto-calculated!', 'success');
+                        return;
+                    }
+                } catch (e) {
+                    console.log('Direct browser fetch error:', e);
+                }
+
                 statusEl.className = 'text-[11px] mt-1.5 text-rose-600 font-semibold block';
                 statusEl.innerText = '✕ ' + (json.message || 'Could not fetch details');
                 showToast(json.message || 'Could not fetch video info', 'error');

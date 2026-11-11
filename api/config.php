@@ -179,20 +179,44 @@ function getDailymotionAccessToken($forceRefresh = false) {
     $needsRefresh = $forceRefresh || ($expiresAt === 0) || ($now >= ($expiresAt - 300));
 
     if ($needsRefresh && !empty($tokenData['refresh_token'])) {
-        $ch = curl_init('https://api.dailymotion.com/oauth/token');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+        $postData = http_build_query([
             'grant_type' => 'refresh_token',
             'client_id' => '2f565bdf5ec09e7464db',
             'client_secret' => '6494629f246182ce9acd3c066a7ab5fae5598a06',
             'refresh_token' => $tokenData['refresh_token']
-        ]));
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        $res = curl_exec($ch);
-        curl_close($ch);
+        ]);
+
+        $res = null;
+
+        // Method 1: file_get_contents native socket stream
+        $opts = [
+            'http' => [
+                'method' => 'POST',
+                'header' => "Content-Type: application/x-www-form-urlencoded\r\nUser-Agent: Mozilla/5.0\r\nContent-Length: " . strlen($postData) . "\r\n",
+                'content' => $postData,
+                'timeout' => 12,
+                'ignore_errors' => true
+            ],
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false
+            ]
+        ];
+        $ctx = stream_context_create($opts);
+        $res = @file_get_contents('https://api.dailymotion.com/oauth/token', false, $ctx);
+
+        // Method 2: cURL fallback
+        if (!$res) {
+            $ch = curl_init('https://api.dailymotion.com/oauth/token');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+            $res = curl_exec($ch);
+            curl_close($ch);
+        }
 
         if ($res) {
             $newTokens = json_decode($res, true);

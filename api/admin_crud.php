@@ -54,28 +54,54 @@ switch ($action) {
 
         $queryDm = function($videoId, $bearer) {
             $url = "https://api.dailymotion.com/video/" . $videoId . "?fields=id,title,duration,thumbnail_url,private";
+
+            // Method 1: native stream socket (bypasses curl proxy/route issues on shared hosts)
+            $headers = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nAccept: application/json\r\n";
+            if ($bearer) {
+                $headers .= "Authorization: Bearer " . $bearer . "\r\n";
+            }
+            $opts = [
+                'http' => [
+                    'method' => 'GET',
+                    'header' => $headers,
+                    'timeout' => 10,
+                    'ignore_errors' => true
+                ],
+                'ssl' => [
+                    'verify_peer' => false,
+                    'verify_peer_name' => false
+                ]
+            ];
+            $ctx = stream_context_create($opts);
+            $res = @file_get_contents($url, false, $ctx);
+            if ($res) {
+                $decoded = json_decode($res, true);
+                if ($decoded && is_array($decoded) && (isset($decoded['id']) || isset($decoded['error']))) {
+                    return $decoded;
+                }
+            }
+
+            // Method 2: cURL
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-            $headers = [
-                "Accept: application/json",
-            ];
+            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+            $cHeaders = ["Accept: application/json"];
             if ($bearer) {
-                $headers[] = "Authorization: Bearer " . $bearer;
+                $cHeaders[] = "Authorization: Bearer " . $bearer;
             }
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-            $res = curl_exec($ch);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $cHeaders);
+            $cRes = curl_exec($ch);
             $curlErr = curl_error($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
 
-            $decoded = $res ? json_decode($res, true) : null;
+            $decoded = $cRes ? json_decode($cRes, true) : null;
             if (!$decoded) {
                 return [
-                    '_raw' => $res,
+                    '_raw' => $cRes ?: $res,
                     '_curl_err' => $curlErr,
                     '_http_code' => $httpCode,
                     '_bearer_len' => $bearer ? strlen($bearer) : 0
@@ -127,6 +153,9 @@ switch ($action) {
             ]);
         } else {
             $err = $json['error']['message'] ?? (!empty($json['_curl_err']) ? $json['_curl_err'] : "Video not found on Dailymotion. Please verify ID or URL.");
+            if ($token && is_array($json)) {
+                $json['_token'] = $token;
+            }
             sendResponse(false, $err, $json, 404);
         }
         break;
