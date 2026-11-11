@@ -158,3 +158,56 @@ function sendResponse($status, $message, $data = null, $code = 200) {
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit();
 }
+
+/**
+ * Retrieve or automatically refresh the Dailymotion Owner Access Token.
+ * If expired or within 5 minutes of expiration, refreshes via refresh_token.
+ */
+function getDailymotionAccessToken($forceRefresh = false) {
+    $tokenFile = __DIR__ . '/../database/dm_user_token.json';
+    if (!file_exists($tokenFile)) {
+        return null;
+    }
+
+    $tokenData = json_decode(@file_get_contents($tokenFile), true);
+    if (!$tokenData || !is_array($tokenData)) {
+        return null;
+    }
+
+    $now = time();
+    $expiresAt = (int)($tokenData['expires_at'] ?? 0);
+    $needsRefresh = $forceRefresh || ($expiresAt === 0) || ($now >= ($expiresAt - 300));
+
+    if ($needsRefresh && !empty($tokenData['refresh_token'])) {
+        $ch = curl_init('https://api.dailymotion.com/oauth/token');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+            'grant_type' => 'refresh_token',
+            'client_id' => '2f565bdf5ec09e7464db',
+            'client_secret' => '6494629f246182ce9acd3c066a7ab5fae5598a06',
+            'refresh_token' => $tokenData['refresh_token']
+        ]));
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $res = curl_exec($ch);
+        curl_close($ch);
+
+        if ($res) {
+            $newTokens = json_decode($res, true);
+            if (!empty($newTokens['access_token'])) {
+                $tokenData['access_token'] = $newTokens['access_token'];
+                if (!empty($newTokens['refresh_token'])) {
+                    $tokenData['refresh_token'] = $newTokens['refresh_token'];
+                }
+                $expiresIn = (int)($newTokens['expires_in'] ?? 36000);
+                $tokenData['expires_at'] = $now + $expiresIn;
+                @file_put_contents($tokenFile, json_encode($tokenData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                return $tokenData['access_token'];
+            }
+        }
+    }
+
+    return $tokenData['access_token'] ?? null;
+}

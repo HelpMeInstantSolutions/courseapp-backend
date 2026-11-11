@@ -49,53 +49,72 @@ switch ($action) {
             $dmId = $matches[1];
         }
 
-        // Get owner bearer token from json
-        $tokenFile = __DIR__ . '/../database/dm_user_token.json';
-        $token = null;
-        if (file_exists($tokenFile)) {
-            $tData = json_decode(file_get_contents($tokenFile), true);
-            $token = $tData['access_token'] ?? null;
-        }
+        // Get owner bearer token (auto refreshed)
+        $token = getDailymotionAccessToken();
 
-        $url = "https://api.dailymotion.com/video/" . $dmId . "?fields=id,title,duration,thumbnail_url,private";
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        if ($token) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $token]);
-        }
-        curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0");
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        $res = curl_exec($ch);
-        curl_close($ch);
-
-        if ($res) {
-            $json = json_decode($res, true);
-            if (isset($json['id'])) {
-                // Convert seconds to MM:SS or HH:MM:SS
-                $secs = (int)($json['duration'] ?? 0);
-                $hrs = floor($secs / 3600);
-                $mins = floor(($secs % 3600) / 60);
-                $remSecs = $secs % 60;
-
-                if ($hrs > 0) {
-                    $formattedDuration = sprintf("%02d:%02d:%02d", $hrs, $mins, $remSecs);
-                } else {
-                    $formattedDuration = sprintf("%02d:%02d", $mins, $remSecs);
-                }
-
-                sendResponse(true, "Video details fetched automatically!", [
-                    'id' => $json['id'],
-                    'title' => $json['title'] ?? '',
-                    'duration' => $formattedDuration,
-                    'seconds' => $secs,
-                    'thumbnail' => $json['thumbnail_url'] ?? '',
-                    'private' => $json['private'] ?? false
-                ]);
-            } else {
-                sendResponse(false, $json['error']['message'] ?? "Video not found", null, 404);
+        $queryDm = function($videoId, $bearer) {
+            $url = "https://api.dailymotion.com/video/" . $videoId . "?fields=id,title,duration,thumbnail_url,private";
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 12);
+            $headers = [];
+            if ($bearer) {
+                $headers[] = "Authorization: Bearer " . $bearer;
             }
+            if (!empty($headers)) {
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            }
+            $res = curl_exec($ch);
+            curl_close($ch);
+            return $res ? json_decode($res, true) : null;
+        };
+
+        $json = $queryDm($dmId, $token);
+
+        // If access token was expired / invalid, force refresh and try once more
+        if (isset($json['error'])) {
+            $errMsg = strtolower($json['error']['message'] ?? '');
+            $errCode = (int)($json['error']['code'] ?? 0);
+            if (strpos($errMsg, 'token') !== false || strpos($errMsg, 'expired') !== false || $errCode === 401) {
+                $token = getDailymotionAccessToken(true);
+                $json = $queryDm($dmId, $token);
+            }
+        }
+
+        // If still failing with token, fallback to unauthenticated query (public videos)
+        if (!isset($json['id']) && $token) {
+            $fallback = $queryDm($dmId, null);
+            if (isset($fallback['id'])) {
+                $json = $fallback;
+            }
+        }
+
+        if ($json && isset($json['id'])) {
+            // Convert seconds to MM:SS or HH:MM:SS
+            $secs = (int)($json['duration'] ?? 0);
+            $hrs = floor($secs / 3600);
+            $mins = floor(($secs % 3600) / 60);
+            $remSecs = $secs % 60;
+
+            if ($hrs > 0) {
+                $formattedDuration = sprintf("%02d:%02d:%02d", $hrs, $mins, $remSecs);
+            } else {
+                $formattedDuration = sprintf("%02d:%02d", $mins, $remSecs);
+            }
+
+            sendResponse(true, "Video details fetched automatically!", [
+                'id' => $json['id'],
+                'title' => $json['title'] ?? '',
+                'duration' => $formattedDuration,
+                'seconds' => $secs,
+                'thumbnail' => $json['thumbnail_url'] ?? '',
+                'private' => $json['private'] ?? false
+            ]);
         } else {
-            sendResponse(false, "Could not connect to Dailymotion", null, 500);
+            $err = $json['error']['message'] ?? "Video not found on Dailymotion. Please verify ID or URL.";
+            sendResponse(false, $err, null, 404);
         }
         break;
 

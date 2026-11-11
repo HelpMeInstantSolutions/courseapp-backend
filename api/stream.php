@@ -20,26 +20,42 @@ if (preg_match('/(?:dailymotion\.com\/(?:video|hub)\/|dai\.ly\/)([a-zA-Z0-9]+)/'
     $dmId = $matches[1];
 }
 
-// 1. Get Owner Bearer Token
-$tokenFile = __DIR__ . '/../database/dm_user_token.json';
-$token = null;
-if (file_exists($tokenFile)) {
-    $t = json_decode(file_get_contents($tokenFile), true);
-    $token = $t['access_token'] ?? null;
-}
+// 1. Get Owner Bearer Token (auto-refreshed)
+$token = getDailymotionAccessToken();
 
 // 2. Fetch authenticated embed URL from Dailymotion API
-$ch = curl_init("https://api.dailymotion.com/video/" . $dmId . "?fields=id,title,embed_url");
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
-if ($token) {
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $token]);
-}
-$res = curl_exec($ch);
-curl_close($ch);
+$fetchEmbed = function($id, $authToken) {
+    $ch = curl_init("https://api.dailymotion.com/video/" . $id . "?fields=id,title,embed_url");
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
+    if ($authToken) {
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer " . $authToken]);
+    }
+    $res = curl_exec($ch);
+    curl_close($ch);
+    return $res ? json_decode($res, true) : null;
+};
 
-$dmData = json_decode($res, true);
+$dmData = $fetchEmbed($dmId, $token);
+
+// If token expired, force refresh and retry
+if (isset($dmData['error'])) {
+    $errMsg = strtolower($dmData['error']['message'] ?? '');
+    if (strpos($errMsg, 'token') !== false || strpos($errMsg, 'expired') !== false || ($dmData['error']['code'] ?? 0) === 401) {
+        $token = getDailymotionAccessToken(true);
+        $dmData = $fetchEmbed($dmId, $token);
+    }
+}
+
+// Fallback to unauthenticated query if needed
+if (!isset($dmData['embed_url']) && $token) {
+    $fallback = $fetchEmbed($dmId, null);
+    if (isset($fallback['embed_url'])) {
+        $dmData = $fallback;
+    }
+}
+
 $embedUrl = $dmData['embed_url'] ?? null;
 $videoTitle = $dmData['title'] ?? 'Video Lecture';
 

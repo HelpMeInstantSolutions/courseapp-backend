@@ -41,7 +41,7 @@ if (preg_match('/(?:dailymotion\.com\/(?:video|hub)\/|dai\.ly\/)([a-zA-Z0-9]+)/'
 }
 $video['clean_dm_id'] = $cleanId;
 
-$token = getOwnerToken();
+$token = getDailymotionAccessToken();
 
 // Query Dailymotion API directly with Owner Bearer Token to get authenticated embed URL
 $dmParams = "autoplay=1&mute=0&controls=1&ui-logo=0&ui-watermark=0&sharing-enable=0&endscreen-enable=0&ui-start-screen-info=0&queue-enable=0";
@@ -76,41 +76,4 @@ $video['access_token'] = $token;
 
 sendResponse(true, "Video details retrieved with Owner Authorized Private Stream", $video);
 
-function getOwnerToken() {
-    $tokenFile = __DIR__ . '/../database/dm_user_token.json';
-    if (!file_exists($tokenFile)) {
-        return null;
-    }
 
-    $tokenData = json_decode(file_get_contents($tokenFile), true);
-    if (!$tokenData || !isset($tokenData['access_token'])) {
-        return null;
-    }
-
-    // If token expired, auto refresh using refresh_token
-    if (isset($tokenData['expires_at']) && time() > ($tokenData['expires_at'] - 300) && isset($tokenData['refresh_token'])) {
-        $ch = curl_init('https://api.dailymotion.com/oauth/token');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-            'grant_type' => 'refresh_token',
-            'client_id' => '2f565bdf5ec09e7464db',
-            'client_secret' => '6494629f246182ce9acd3c066a7ab5fae5598a06',
-            'refresh_token' => $tokenData['refresh_token']
-        ]));
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        $res = curl_exec($ch);
-        curl_close($ch);
-
-        if ($res) {
-            $newTokens = json_decode($res, true);
-            if (isset($newTokens['access_token'])) {
-                $newTokens['expires_at'] = time() + ($newTokens['expires_in'] ?? 36000);
-                file_put_contents($tokenFile, json_encode($newTokens));
-                return $newTokens['access_token'];
-            }
-        }
-    }
-
-    return $tokenData['access_token'];
-}
