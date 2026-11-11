@@ -27,7 +27,7 @@ foreach ($dmAccounts as $a) {
 
 // Default Client ID for 1-Click Authorize
 $defaultClientId = '2f565bdf5ec09e7464db';
-$defaultRedirectUri = 'https://insightclasses.in/api';
+$defaultRedirectUri = 'https://courseapp.mybhiwani.in/api/';
 $oneClickAuthUrl = "https://api.dailymotion.com/oauth/authorize?response_type=code&client_id={$defaultClientId}&redirect_uri=" . urlencode($defaultRedirectUri) . "&scope=manage_videos+read+userinfo";
 ?>
 
