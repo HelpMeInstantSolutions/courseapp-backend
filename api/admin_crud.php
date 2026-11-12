@@ -150,10 +150,10 @@ switch ($action) {
                 $candidateUris[] = rtrim($detected, '/');
                 $candidateUris[] = rtrim($detected, '/') . '/';
             }
-            $candidateUris[] = 'https://insightclasses.in/api';
-            $candidateUris[] = 'https://insightclasses.in/api/';
             $candidateUris[] = 'https://courseapp.mybhiwani.in/api/';
             $candidateUris[] = 'https://courseapp.mybhiwani.in/api';
+            $candidateUris[] = 'https://insightclasses.in/api';
+            $candidateUris[] = 'https://insightclasses.in/api/';
             $candidateUris = array_values(array_unique($candidateUris));
 
             foreach ($candidateUris as $curUri) {
@@ -275,10 +275,10 @@ switch ($action) {
             $candidateUris[] = rtrim($detected, '/');
             $candidateUris[] = rtrim($detected, '/') . '/';
         }
-        $candidateUris[] = 'https://insightclasses.in/api';
-        $candidateUris[] = 'https://insightclasses.in/api/';
         $candidateUris[] = 'https://courseapp.mybhiwani.in/api/';
         $candidateUris[] = 'https://courseapp.mybhiwani.in/api';
+        $candidateUris[] = 'https://insightclasses.in/api';
+        $candidateUris[] = 'https://insightclasses.in/api/';
         $candidateUris = array_values(array_unique($candidateUris));
 
         $tData = null;
