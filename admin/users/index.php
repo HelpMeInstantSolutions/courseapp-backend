@@ -29,9 +29,9 @@ try {
         WHERE e.user_id = ? AND e.status = 1
         ORDER BY e.id DESC
     ");
-    foreach ($users as &$u) {
+    foreach ($users as $k => $u) {
         $enrStmt->execute([$u['id']]);
-        $u['enrollments'] = $enrStmt->fetchAll();
+        $users[$k]['enrollments'] = $enrStmt->fetchAll();
     }
 } catch (Exception $e) {}
 

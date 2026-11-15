@@ -54,9 +54,9 @@ switch ($action) {
         // Attach validity info for each course if student is logged in
         if ($userId > 0 && !empty($courses)) {
             $valStmt = $pdo->prepare("SELECT validity_date FROM user_enrollments WHERE user_id = ? AND course_id = ? AND status = 1 ORDER BY (validity_date IS NULL) DESC, validity_date DESC LIMIT 1");
-            foreach ($courses as &$c) {
+            foreach ($courses as $k => $c) {
                 $valStmt->execute([$userId, $c['id']]);
-                $c['user_validity_date'] = $valStmt->fetchColumn() ?: 'Lifetime Access';
+                $courses[$k]['user_validity_date'] = $valStmt->fetchColumn() ?: 'Lifetime Access';
             }
         }
 
@@ -209,11 +209,11 @@ switch ($action) {
 
             // Sub chapters / folders inside this chapter
             $subFolders = $subsByParent[$mchId] ?? [];
-            foreach ($subFolders as &$subF) {
+            foreach ($subFolders as $sfKey => $subF) {
                 $subFId = (int)$subF['id'];
                 $subVideos = $videosByChapter[$subFId] ?? [];
-                $subF['videos'] = $subVideos;
-                $subF['total_videos'] = count($subVideos);
+                $subFolders[$sfKey]['videos'] = $subVideos;
+                $subFolders[$sfKey]['total_videos'] = count($subVideos);
             }
             $mch['sub_chapters'] = $subFolders;
             $mch['total_sub_chapters'] = count($subFolders);
@@ -299,10 +299,10 @@ switch ($action) {
             $videosByChapter[$cId][] = $v;
         }
 
-        foreach ($chapters as &$ch) {
+        foreach ($chapters as $chKey => $ch) {
             $chId = (int)$ch['id'];
-            $ch['videos'] = $videosByChapter[$chId] ?? [];
-            $ch['total_videos'] = count($ch['videos']);
+            $chapters[$chKey]['videos'] = $videosByChapter[$chId] ?? [];
+            $chapters[$chKey]['total_videos'] = count($chapters[$chKey]['videos']);
         }
 
         $course['chapters'] = $chapters;
