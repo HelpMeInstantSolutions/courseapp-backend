@@ -14,7 +14,7 @@ $activePage = $activePage ?? 'dashboard';
         </div>
         <div class="flex-1 truncate">
             <a href="/admin/" class="font-bold text-slate-900 tracking-tight text-base hover:text-indigo-600 transition block truncate">
-                CourseApp Admin
+                BatchX Admin
             </a>
             <p class="text-[11px] text-slate-400 font-medium truncate">courseapp.mybhiwani.in</p>
         </div>
@@ -89,6 +89,22 @@ $activePage = $activePage ?? 'dashboard';
             <span class="text-xs font-semibold px-2 py-0.5 rounded-full <?= $activePage === 'users' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' ?>">
                 <?= $serverStats['users'] ?? 0 ?>
             </span>
+        </a>
+
+        <!-- Student Queries Link -->
+        <a href="/admin/queries/" 
+           class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 <?= $activePage === 'queries' ? 'bg-indigo-50 text-indigo-700 font-semibold border-r-4 border-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' ?>">
+            <i data-lucide="help-circle" class="w-4 h-4 <?= $activePage === 'queries' ? 'text-indigo-600' : 'text-slate-400' ?>"></i>
+            <span class="flex-1">Student Queries</span>
+            <?php if (($serverStats['queries'] ?? 0) > 0): ?>
+                <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-rose-500 text-white animate-pulse">
+                    <?= $serverStats['queries'] ?>
+                </span>
+            <?php else: ?>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                    0
+                </span>
+            <?php endif; ?>
         </a>
 
         <div class="pt-4 pb-2">

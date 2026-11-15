@@ -369,6 +369,7 @@ switch ($action) {
         $totalCategories = $pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
         $totalUsers = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
         $totalDmAccounts = $pdo->query("SELECT COUNT(*) FROM dm_accounts WHERE status = 1")->fetchColumn();
+        $pendingQueries = (int)$pdo->query("SELECT COUNT(*) FROM user_queries WHERE status = 'pending'")->fetchColumn();
 
         sendResponse(true, "Stats loaded", [
             'courses' => $totalCourses,
@@ -377,7 +378,8 @@ switch ($action) {
             'videos' => $totalVideos,
             'categories' => $totalCategories,
             'users' => $totalUsers,
-            'dm_accounts' => $totalDmAccounts
+            'dm_accounts' => $totalDmAccounts,
+            'pending_queries' => $pendingQueries
         ]);
         break;
 
@@ -534,17 +536,152 @@ switch ($action) {
         break;
 
     case 'list_users':
-        $stmt = $pdo->query("SELECT id, name, email, phone, status, created_at FROM users ORDER BY id DESC");
+        $stmt = $pdo->query("
+            SELECT u.id, u.name, u.email, u.phone, u.status, u.created_at,
+                   u.plain_password, u.device_id, u.device_model, u.otp_code, u.is_verified,
+                   (SELECT COUNT(*) FROM user_enrollments e WHERE e.user_id = u.id AND e.status = 1 AND (e.validity_date IS NULL OR e.validity_date >= DATE('now'))) as active_enrollments_count
+            FROM users u 
+            ORDER BY u.id DESC
+        ");
         $users = $stmt->fetchAll();
+
+        // For each user, attach brief enrolled batch names
+        $enrStmt = $pdo->prepare("
+            SELECT e.id as enrollment_id, e.course_id, e.subject_id, e.validity_date,
+                   c.title as course_title, s.title as subject_title
+            FROM user_enrollments e
+            LEFT JOIN courses c ON e.course_id = c.id
+            LEFT JOIN subjects s ON e.subject_id = s.id
+            WHERE e.user_id = ? AND e.status = 1
+            ORDER BY e.id DESC
+        ");
+        foreach ($users as &$u) {
+            $enrStmt->execute([$u['id']]);
+            $u['enrollments'] = $enrStmt->fetchAll();
+        }
+
         sendResponse(true, "Users list retrieved", $users);
+        break;
+
+    case 'change_user_password':
+        $userId = (int)($input['user_id'] ?? 0);
+        $newPassword = trim($input['new_password'] ?? '');
+
+        if ($userId <= 0 || !$newPassword) {
+            sendResponse(false, "User ID and new password are required", null, 400);
+        }
+
+        $hash = password_hash($newPassword, PASSWORD_BCRYPT);
+        $stmt = $pdo->prepare("UPDATE users SET password = ?, plain_password = ? WHERE id = ?");
+        $stmt->execute([$hash, $newPassword, $userId]);
+        sendResponse(true, "Password updated successfully!");
+        break;
+
+    case 'toggle_user_status':
+        $userId = (int)($input['user_id'] ?? 0);
+        $status = (int)($input['status'] ?? 1);
+
+        if ($userId <= 0) {
+            sendResponse(false, "Invalid user ID", null, 400);
+        }
+
+        $stmt = $pdo->prepare("UPDATE users SET status = ? WHERE id = ?");
+        $stmt->execute([$status, $userId]);
+        $msg = $status === 1 ? "Student account activated." : "Student account deactivated.";
+        sendResponse(true, $msg);
+        break;
+
+    case 'verify_user_otp':
+        $userId = (int)($input['user_id'] ?? 0);
+        if ($userId <= 0) {
+            sendResponse(false, "Invalid user ID", null, 400);
+        }
+
+        $stmt = $pdo->prepare("UPDATE users SET is_verified = 1, otp_code = NULL WHERE id = ?");
+        $stmt->execute([$userId]);
+        sendResponse(true, "Student account verified and activated successfully!");
+        break;
+
+    case 'unbind_user_device':
+        $userId = (int)($input['user_id'] ?? 0);
+        if ($userId <= 0) {
+            sendResponse(false, "Invalid user ID", null, 400);
+        }
+
+        $stmt = $pdo->prepare("UPDATE users SET device_id = NULL, device_model = NULL WHERE id = ?");
+        $stmt->execute([$userId]);
+        sendResponse(true, "Device unlinked successfully! Student can now login from a new phone.");
+        break;
+
+    case 'assign_user_enrollment':
+        $userId = (int)($input['user_id'] ?? 0);
+        $courseId = (int)($input['course_id'] ?? 0);
+        $subjectId = (int)($input['subject_id'] ?? 0); // 0 = all subjects in batch
+        $validityDate = trim($input['validity_date'] ?? ''); // YYYY-MM-DD or empty for lifetime
+
+        if ($userId <= 0 || $courseId <= 0) {
+            sendResponse(false, "Student and Batch selection are required", null, 400);
+        }
+
+        $valDate = (!empty($validityDate) && $validityDate !== 'lifetime') ? $validityDate : null;
+
+        // Check if enrollment already exists
+        $chk = $pdo->prepare("SELECT id FROM user_enrollments WHERE user_id = ? AND course_id = ? AND subject_id = ?");
+        $chk->execute([$userId, $courseId, $subjectId]);
+        $existingId = $chk->fetchColumn();
+
+        if ($existingId) {
+            $up = $pdo->prepare("UPDATE user_enrollments SET validity_date = ?, status = 1 WHERE id = ?");
+            $up->execute([$valDate, $existingId]);
+            sendResponse(true, "Enrollment validity updated successfully!");
+        } else {
+            $ins = $pdo->prepare("INSERT INTO user_enrollments (user_id, course_id, subject_id, validity_date, status) VALUES (?, ?, ?, ?, 1)");
+            $ins->execute([$userId, $courseId, $subjectId, $valDate]);
+            sendResponse(true, "Batch / Subject assigned to student successfully!");
+        }
+        break;
+
+    case 'list_user_enrollments':
+        $userId = (int)($input['user_id'] ?? ($_GET['user_id'] ?? 0));
+        if ($userId <= 0) {
+            sendResponse(false, "Invalid user ID", null, 400);
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT e.*, c.title as course_title, s.title as subject_title 
+            FROM user_enrollments e 
+            LEFT JOIN courses c ON e.course_id = c.id 
+            LEFT JOIN subjects s ON e.subject_id = s.id 
+            WHERE e.user_id = ? 
+            ORDER BY e.id DESC
+        ");
+        $stmt->execute([$userId]);
+        sendResponse(true, "Enrollments retrieved", $stmt->fetchAll());
+        break;
+
+    case 'delete_user_enrollment':
+        $id = (int)($input['id'] ?? 0);
+        if ($id <= 0) {
+            sendResponse(false, "Invalid enrollment ID", null, 400);
+        }
+
+        $stmt = $pdo->prepare("DELETE FROM user_enrollments WHERE id = ?");
+        $stmt->execute([$id]);
+        sendResponse(true, "Student access revoked successfully.");
         break;
 
     case 'delete_user':
         $userId = (int)($input['id'] ?? 0);
         if ($userId <= 0) sendResponse(false, "Invalid User ID", null, 400);
+
+        // Delete user's enrollments and progress
+        $pdo->prepare("DELETE FROM user_enrollments WHERE user_id = ?")->execute([$userId]);
+        $pdo->prepare("DELETE FROM user_video_progress WHERE user_id = ?")->execute([$userId]);
+        $pdo->prepare("DELETE FROM user_queries WHERE user_id = ?")->execute([$userId]);
+
         $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
         $stmt->execute([$userId]);
-        sendResponse(true, "Student account deleted successfully!");
+        sendResponse(true, "Student account and all related data deleted successfully!");
         break;
 
     case 'list_courses':

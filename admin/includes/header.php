@@ -15,6 +15,7 @@ $serverStats = [
     'categories' => 0,
     'users' => 0,
     'dm_accounts' => 0,
+    'queries' => 0,
 ];
 
 try {
@@ -25,11 +26,12 @@ try {
     $serverStats['categories'] = (int)$pdo->query("SELECT COUNT(*) FROM categories")->fetchColumn();
     $serverStats['users'] = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
     $serverStats['dm_accounts'] = (int)$pdo->query("SELECT COUNT(*) FROM dm_accounts WHERE status = 1")->fetchColumn();
+    $serverStats['queries'] = (int)$pdo->query("SELECT COUNT(*) FROM user_queries WHERE status = 'pending'")->fetchColumn();
 } catch (Exception $e) {
     // fallback if db error
 }
 
-$pageTitle = $pageTitle ?? 'Admin Dashboard';
+$pageTitle = $pageTitle ?? 'BatchX Admin Dashboard';
 $activePage = $activePage ?? 'dashboard';
 ?>
 <!DOCTYPE html>
@@ -37,7 +39,7 @@ $activePage = $activePage ?? 'dashboard';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($pageTitle) ?> | CourseApp Admin</title>
+    <title><?= htmlspecialchars($pageTitle) ?> | BatchX Admin</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">

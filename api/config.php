@@ -152,7 +152,56 @@ function initDatabase($pdo) {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, video_id)
         );
+
+        CREATE TABLE IF NOT EXISTS user_enrollments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            course_id INTEGER NOT NULL,
+            subject_id INTEGER DEFAULT 0,
+            validity_date DATE,
+            status INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS user_queries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER DEFAULT 0,
+            name TEXT NOT NULL,
+            phone TEXT,
+            email TEXT,
+            subject TEXT,
+            message TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            admin_reply TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
     ");
+
+    // Migrations for users table (Phone, Plain Password, Device Lock, OTP, Verification)
+    try {
+        $userCols = $pdo->query("PRAGMA table_info(users)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('plain_password', $userCols)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN plain_password TEXT");
+        }
+        if (!in_array('device_id', $userCols)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN device_id TEXT DEFAULT NULL");
+        }
+        if (!in_array('device_model', $userCols)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN device_model TEXT DEFAULT NULL");
+        }
+        if (!in_array('otp_code', $userCols)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN otp_code TEXT DEFAULT NULL");
+        }
+        if (!in_array('is_verified', $userCols)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 1");
+        }
+        if (!in_array('status', $userCols)) {
+            $pdo->exec("ALTER TABLE users ADD COLUMN status INTEGER DEFAULT 1");
+        }
+    } catch (Exception $e) {}
 
     // Migrations for videos table
     try {

@@ -7,6 +7,8 @@ $action = $_GET['action'] ?? 'list';
 switch ($action) {
     case 'list':
         $categoryId = isset($_GET['category_id']) ? (int)$_GET['category_id'] : 0;
+        $userId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
+
         $sql = "SELECT c.*, cat.title as category_name, 
                        (SELECT COUNT(*) FROM subjects s WHERE s.course_id = c.id AND s.status = 1) as total_subjects,
                        (SELECT COUNT(*) FROM chapters ch WHERE ch.course_id = c.id AND ch.status = 1) as total_chapters,
@@ -20,28 +22,97 @@ switch ($action) {
             $sql .= " AND c.category_id = ?";
             $params[] = $categoryId;
         }
+
+        // Student Access Control: Show only assigned batches with valid dates
+        if ($userId > 0) {
+            $enrolledStmt = $pdo->prepare("
+                SELECT course_id, subject_id, validity_date
+                FROM user_enrollments
+                WHERE user_id = ? 
+                  AND status = 1 
+                  AND (validity_date IS NULL OR validity_date >= DATE('now'))
+            ");
+            $enrolledStmt->execute([$userId]);
+            $enrollments = $enrolledStmt->fetchAll();
+
+            if (!empty($enrollments)) {
+                $enrolledCourseIds = array_unique(array_column($enrollments, 'course_id'));
+                $inList = implode(',', array_map('intval', $enrolledCourseIds));
+                $sql .= " AND c.id IN ($inList)";
+            } else {
+                // If student has no assigned batches, return empty list
+                $sql .= " AND 1=0";
+            }
+        }
+
         $sql .= " ORDER BY c.id DESC";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $courses = $stmt->fetchAll();
 
+        // Attach validity info for each course if student is logged in
+        if ($userId > 0 && !empty($courses)) {
+            $valStmt = $pdo->prepare("SELECT validity_date FROM user_enrollments WHERE user_id = ? AND course_id = ? AND status = 1 ORDER BY (validity_date IS NULL) DESC, validity_date DESC LIMIT 1");
+            foreach ($courses as &$c) {
+                $valStmt->execute([$userId, $c['id']]);
+                $c['user_validity_date'] = $valStmt->fetchColumn() ?: 'Lifetime Access';
+            }
+        }
+
         sendResponse(true, "Batches retrieved successfully", $courses);
         break;
 
     case 'subjects':
         $courseId = (int)($_GET['course_id'] ?? 0);
+        $userId = (int)($_GET['user_id'] ?? 0);
         if ($courseId <= 0) {
             sendResponse(false, "Batch ID is required", null, 400);
         }
 
-        $stmt = $pdo->prepare("SELECT s.*, 
-                               (SELECT COUNT(*) FROM chapters ch WHERE ch.subject_id = s.id AND (ch.parent_id = 0 OR ch.parent_id IS NULL) AND ch.status = 1) as total_chapters,
-                               (SELECT COUNT(*) FROM videos v WHERE v.subject_id = s.id AND v.status = 1) as total_videos 
-                               FROM subjects s 
-                               WHERE s.course_id = ? AND s.status = 1 
-                               ORDER BY s.sort_order ASC, s.id ASC");
-        $stmt->execute([$courseId]);
+        $subSql = "SELECT s.*, 
+                   (SELECT COUNT(*) FROM chapters ch WHERE ch.subject_id = s.id AND (ch.parent_id = 0 OR ch.parent_id IS NULL) AND ch.status = 1) as total_chapters,
+                   (SELECT COUNT(*) FROM videos v WHERE v.subject_id = s.id AND v.status = 1) as total_videos 
+                   FROM subjects s 
+                   WHERE s.course_id = ? AND s.status = 1";
+        $subParams = [$courseId];
+
+        // If user_id is provided, check if specific subject or whole batch is assigned
+        if ($userId > 0) {
+            $enrolledSubStmt = $pdo->prepare("
+                SELECT subject_id, validity_date 
+                FROM user_enrollments 
+                WHERE user_id = ? AND course_id = ? AND status = 1 
+                  AND (validity_date IS NULL OR validity_date >= DATE('now'))
+            ");
+            $enrolledSubStmt->execute([$userId, $courseId]);
+            $enrolledSubs = $enrolledSubStmt->fetchAll();
+
+            if (!empty($enrolledSubs)) {
+                $hasFullBatch = false;
+                $specificIds = [];
+                foreach ($enrolledSubs as $es) {
+                    if ((int)$es['subject_id'] === 0) {
+                        $hasFullBatch = true;
+                        break;
+                    } else {
+                        $specificIds[] = (int)$es['subject_id'];
+                    }
+                }
+
+                if (!$hasFullBatch && !empty($specificIds)) {
+                    $inIds = implode(',', $specificIds);
+                    $subSql .= " AND s.id IN ($inIds)";
+                }
+            } else {
+                // Not enrolled or validity expired
+                $subSql .= " AND 1=0";
+            }
+        }
+
+        $subSql .= " ORDER BY s.sort_order ASC, s.id ASC";
+        $stmt = $pdo->prepare($subSql);
+        $stmt->execute($subParams);
         $subjects = $stmt->fetchAll();
 
         sendResponse(true, "Subjects retrieved successfully", $subjects);

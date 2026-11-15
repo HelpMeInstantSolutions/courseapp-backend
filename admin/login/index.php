@@ -7,7 +7,7 @@ session_start();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login | CourseApp</title>
+    <title>BatchX Admin Login</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -27,8 +27,8 @@ session_start();
             <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/25 mb-4">
                 <i data-lucide="shield-check" class="w-7 h-7"></i>
             </div>
-            <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Admin Portal</h1>
-            <p class="text-xs text-slate-500 mt-1">Insight CourseApp Management &bull; courseapp.mybhiwani.in</p>
+            <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">BatchX Admin</h1>
+            <p class="text-xs text-slate-500 mt-1">BatchX Course Management &bull; courseapp.mybhiwani.in</p>
         </div>
 
         <!-- Login Form -->
