@@ -92,15 +92,21 @@ try {
 
                             <div class="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
                                 <div class="flex items-center gap-1.5 flex-wrap">
+                                    <a href="/admin/subjects/?course_id=<?= $c['id'] ?>" 
+                                       title="View Subjects"
+                                       class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg border border-emerald-100/60 transition">
+                                        <i data-lucide="book-open" class="w-3.5 h-3.5 text-emerald-500"></i>
+                                        <span>Subjects</span>
+                                    </a>
                                     <a href="/admin/chapters/?course_id=<?= $c['id'] ?>" 
                                        title="View Chapters"
-                                       class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-100/60 transition">
+                                       class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg border border-indigo-100/60 transition">
                                         <i data-lucide="layers" class="w-3.5 h-3.5 text-indigo-500"></i>
                                         <span><?= (int)($c['chapter_count'] ?? 0) ?> Chapters</span>
                                     </a>
                                     <a href="/admin/videos/?course_id=<?= $c['id'] ?>" 
                                        title="View Videos"
-                                       class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition">
+                                       class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-lg transition">
                                         <i data-lucide="video" class="w-3.5 h-3.5 text-slate-500"></i>
                                         <span><?= (int)$c['video_count'] ?> Videos</span>
                                     </a>

@@ -1,21 +1,34 @@
 <?php
-// backend/admin/videos/index.php
+// backend/admin/videos/index.php - Video Lessons Management (Batch -> Subject -> Chapter -> Video)
 $pageTitle = 'Video Lessons';
 $activePage = 'videos';
 $headerTitle = 'Video Lessons Management';
-$headerSubtitle = 'Dailymotion private stream sync, auto duration calculation and lesson sequencing';
+$headerSubtitle = 'Dailymotion private stream sync, PDF notes, demo preview and lesson sequencing';
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/sidebar.php';
 
-// Filter by course if selected
+// Filter params
 $selectedCourseId = (int)($_GET['course_id'] ?? 0);
+$selectedSubjectId = (int)($_GET['subject_id'] ?? 0);
 $selectedChapterId = (int)($_GET['chapter_id'] ?? 0);
 
-// Fetch all courses for dropdown and filtering
+// Fetch all batches for dropdown and filtering
 $courses = [];
 try {
     $courses = $pdo->query("SELECT id, title FROM courses ORDER BY id DESC")->fetchAll();
+} catch (Exception $e) {}
+
+// Fetch all subjects
+$allSubjects = [];
+try {
+    $allSubjects = $pdo->query("SELECT id, course_id, title FROM subjects WHERE status = 1 ORDER BY sort_order ASC, id ASC")->fetchAll();
+} catch (Exception $e) {}
+
+// Fetch all chapters
+$allChapters = [];
+try {
+    $allChapters = $pdo->query("SELECT id, course_id, subject_id, parent_id, title FROM chapters WHERE status = 1 ORDER BY sort_order ASC, id ASC")->fetchAll();
 } catch (Exception $e) {}
 
 // Fetch active Dailymotion accounts
@@ -24,22 +37,14 @@ try {
     $dmAccounts = $pdo->query("SELECT id, name, channel_name, uid, is_default FROM dm_accounts WHERE status = 1 ORDER BY is_default DESC, id ASC")->fetchAll();
 } catch (Exception $e) {}
 
-// Fetch chapters for selected course (if any) for filter dropdown
-$filterChapters = [];
-if ($selectedCourseId > 0) {
-    try {
-        $chStmt = $pdo->prepare("SELECT id, title FROM chapters WHERE course_id = ? ORDER BY sort_order ASC, id ASC");
-        $chStmt->execute([$selectedCourseId]);
-        $filterChapters = $chStmt->fetchAll();
-    } catch (Exception $e) {}
-}
-
-// Query videos with Chapter & DM Account details
+// Query videos with Batch, Subject, Chapter & DM Account details
 $videos = [];
 try {
-    $sql = "SELECT v.*, c.title AS course_title, ch.title AS chapter_title, a.name AS dm_account_name, a.channel_name AS dm_channel_name 
+    $sql = "SELECT v.*, c.title AS course_title, s.title AS subject_title, ch.title AS chapter_title, 
+                   a.name AS dm_account_name, a.channel_name AS dm_channel_name 
             FROM videos v 
             LEFT JOIN courses c ON v.course_id = c.id 
+            LEFT JOIN subjects s ON v.subject_id = s.id
             LEFT JOIN chapters ch ON v.chapter_id = ch.id 
             LEFT JOIN dm_accounts a ON v.dm_account_id = a.id
             WHERE 1=1";
@@ -48,11 +53,15 @@ try {
         $sql .= " AND v.course_id = ?";
         $params[] = $selectedCourseId;
     }
+    if ($selectedSubjectId > 0) {
+        $sql .= " AND v.subject_id = ?";
+        $params[] = $selectedSubjectId;
+    }
     if ($selectedChapterId > 0) {
         $sql .= " AND v.chapter_id = ?";
         $params[] = $selectedChapterId;
     }
-    $sql .= " ORDER BY v.sort_order ASC, v.id DESC";
+    $sql .= " ORDER BY v.course_id DESC, v.subject_id ASC, v.chapter_id ASC, v.sort_order ASC, v.id ASC";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -60,7 +69,7 @@ try {
 } catch (Exception $e) {}
 ?>
 
-<!-- MAIN CONTENT WRAPPER (INDEPENDENT SCROLL) -->
+<!-- MAIN CONTENT WRAPPER -->
 <div class="flex-1 h-full overflow-y-auto flex flex-col min-w-0 bg-slate-50 relative">
     <?php require_once __DIR__ . '/../includes/navbar.php'; ?>
 
@@ -69,17 +78,17 @@ try {
         <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
             <div class="flex items-center gap-3 flex-1 flex-wrap">
                 <!-- Search -->
-                <div class="relative flex-1 min-w-[200px]">
+                <div class="relative flex-1 min-w-[180px]">
                     <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
                     <input type="text" id="videoSearch" oninput="filterVideos()" 
                            placeholder="Search by lesson title or DM ID..." 
                            class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:bg-white transition">
                 </div>
 
-                <!-- Course Filter Dropdown -->
-                <select id="courseFilter" onchange="applyCourseFilter(this.value)" 
+                <!-- Batch Filter Dropdown -->
+                <select id="courseFilter" onchange="applyFilters()" 
                         class="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
-                    <option value="0">All Courses</option>
+                    <option value="0">All Batches (<?= count($videos) ?>)</option>
                     <?php foreach ($courses as $c): ?>
                         <option value="<?= $c['id'] ?>" <?= $selectedCourseId == $c['id'] ? 'selected' : '' ?>>
                             <?= htmlspecialchars($c['title']) ?>
@@ -87,12 +96,29 @@ try {
                     <?php endforeach; ?>
                 </select>
 
-                <!-- Chapter Filter Dropdown (visible when course is selected) -->
-                <?php if ($selectedCourseId > 0 && !empty($filterChapters)): ?>
-                    <select id="chapterFilter" onchange="applyChapterFilter(this.value)" 
+                <!-- Subject Filter Dropdown -->
+                <select id="subjectFilter" onchange="applyFilters()" 
+                        class="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    <option value="0">All Subjects</option>
+                    <?php foreach ($allSubjects as $s): ?>
+                        <?php if ($selectedCourseId == 0 || $selectedCourseId == $s['course_id']): ?>
+                            <option value="<?= $s['id'] ?>" <?= $selectedSubjectId == $s['id'] ? 'selected' : '' ?>>
+                                📚 <?= htmlspecialchars($s['title']) ?>
+                            </option>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </select>
+
+                <!-- Chapter Filter Dropdown -->
+                <?php if ($selectedCourseId > 0 || $selectedSubjectId > 0): ?>
+                    <select id="chapterFilter" onchange="applyFilters()" 
                             class="px-3.5 py-2 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-medium text-indigo-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition">
-                        <option value="0">All Chapters (<?= count($videos) ?>)</option>
-                        <?php foreach ($filterChapters as $ch): ?>
+                        <option value="0">All Chapters</option>
+                        <?php foreach ($allChapters as $ch): ?>
+                            <?php 
+                            if ($selectedCourseId > 0 && $ch['course_id'] != $selectedCourseId) continue;
+                            if ($selectedSubjectId > 0 && $ch['subject_id'] > 0 && $ch['subject_id'] != $selectedSubjectId) continue;
+                            ?>
                             <option value="<?= $ch['id'] ?>" <?= $selectedChapterId == $ch['id'] ? 'selected' : '' ?>>
                                 📁 <?= htmlspecialchars($ch['title']) ?>
                             </option>
@@ -109,7 +135,7 @@ try {
             </button>
         </div>
 
-        <!-- Videos Data Table (Light Theme) -->
+        <!-- Videos Data Table -->
         <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs" id="videosTable">
@@ -117,18 +143,19 @@ try {
                         <tr>
                             <th class="py-3.5 px-4 w-12 text-center">#</th>
                             <th class="py-3.5 px-4">Lesson Details</th>
-                            <th class="py-3.5 px-4">Course</th>
+                            <th class="py-3.5 px-4">Batch & Subject</th>
                             <th class="py-3.5 px-4">Chapter</th>
                             <th class="py-3.5 px-4">Dailymotion ID</th>
+                            <th class="py-3.5 px-4 text-center">PDF Notes</th>
                             <th class="py-3.5 px-4">Duration</th>
-                            <th class="py-3.5 px-4">Access Type</th>
+                            <th class="py-3.5 px-4 text-center">Access</th>
                             <th class="py-3.5 px-4 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 font-medium">
                         <?php if (empty($videos)): ?>
                             <tr>
-                                <td colspan="8" class="py-12 text-center text-slate-400">
+                                <td colspan="9" class="py-12 text-center text-slate-400">
                                     <div class="w-12 h-12 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-3">
                                         <i data-lucide="video-off" class="w-6 h-6"></i>
                                     </div>
@@ -142,7 +169,7 @@ try {
                                     data-title="<?= strtolower(htmlspecialchars($v['title'])) ?>"
                                     data-dmid="<?= strtolower(htmlspecialchars($v['dailymotion_id'])) ?>">
                                     <td class="py-3.5 px-4 text-center font-bold text-slate-400">
-                                        <?= htmlspecialchars($v['sort_order']) ?>
+                                        #<?= htmlspecialchars($v['sort_order']) ?>
                                     </td>
                                     <td class="py-3.5 px-4">
                                         <div class="flex items-center gap-3">
@@ -155,10 +182,19 @@ try {
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="py-3.5 px-4 text-slate-600 truncate max-w-[150px]">
-                                        <span class="px-2 py-1 rounded-md bg-slate-100 text-slate-700 font-medium text-[11px]">
-                                            <?= htmlspecialchars($v['course_title'] ?? 'General') ?>
-                                        </span>
+                                    <td class="py-3.5 px-4">
+                                        <div class="space-y-1">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 block truncate max-w-[150px]">
+                                                <i data-lucide="graduation-cap" class="w-2.5 h-2.5 text-slate-400"></i>
+                                                <?= htmlspecialchars($v['course_title'] ?? 'General') ?>
+                                            </span>
+                                            <?php if (!empty($v['subject_title'])): ?>
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 block truncate max-w-[150px]">
+                                                    <i data-lucide="book-open" class="w-2.5 h-2.5 text-emerald-500"></i>
+                                                    <?= htmlspecialchars($v['subject_title']) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                     <td class="py-3.5 px-4 text-slate-600 truncate max-w-[140px]">
                                         <?php if (!empty($v['chapter_title'])): ?>
@@ -183,20 +219,32 @@ try {
                                             <?php endif; ?>
                                         </div>
                                     </td>
+                                    <td class="py-3.5 px-4 text-center">
+                                        <?php if (!empty($v['pdf_url'])): ?>
+                                            <a href="<?= htmlspecialchars($v['pdf_url']) ?>" target="_blank" 
+                                               title="View PDF Notes"
+                                               class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition">
+                                                <i data-lucide="file-text" class="w-3 h-3 text-rose-500"></i>
+                                                <span>PDF</span>
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="text-slate-300 text-xs">—</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td class="py-3.5 px-4">
                                         <span class="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
                                             <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
                                             <?= htmlspecialchars($v['duration']) ?>
                                         </span>
                                     </td>
-                                    <td class="py-3.5 px-4">
+                                    <td class="py-3.5 px-4 text-center">
                                         <?php if ($v['is_free_preview']): ?>
                                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
                                                 <i data-lucide="unlock" class="w-3 h-3"></i> Free Demo
                                             </span>
                                         <?php else: ?>
                                             <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold">
-                                                <i data-lucide="lock" class="w-3 h-3"></i> Enrolled Only
+                                                <i data-lucide="lock" class="w-3 h-3"></i> Enrolled
                                             </span>
                                         <?php endif; ?>
                                     </td>
@@ -207,7 +255,7 @@ try {
                                                     class="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
                                                 <i data-lucide="external-link" class="w-4 h-4"></i>
                                             </button>
-                                            <button onclick='editVideo(<?= json_encode($v) ?>)' 
+                                            <button onclick='editVideo(<?= json_encode($v, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)' 
                                                     title="Edit Lesson" 
                                                     class="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
                                                 <i data-lucide="edit-3" class="w-4 h-4"></i>
@@ -229,7 +277,7 @@ try {
     </main>
 </div>
 
-<!-- ADD / EDIT VIDEO MODAL WITH AUTO DURATION CALCULATION -->
+<!-- ADD / EDIT VIDEO MODAL -->
 <div id="videoModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -239,26 +287,41 @@ try {
             </button>
         </div>
 
-        <form id="videoForm" onsubmit="handleSaveVideo(event)" class="p-6 space-y-4">
+        <form id="videoForm" onsubmit="handleSaveVideo(event)" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
             <input type="hidden" id="video_id" value="0">
 
-            <!-- Course Selection -->
+            <!-- Batch Selection -->
             <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Assign To Course *</label>
-                <select id="video_course_id" onchange="onCourseChanged(this.value)" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
-                    <option value="">-- Choose Course --</option>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Assign To Batch *</label>
+                <select id="video_course_id" onchange="onBatchChangedInModal()" required 
+                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    <option value="">-- Choose Batch --</option>
                     <?php foreach ($courses as $c): ?>
-                        <option value="<?= $c['id'] ?>" <?= $selectedCourseId == $c['id'] ? 'selected' : '' ?>>
+                        <option value="<?= $c['id'] ?>">
                             <?= htmlspecialchars($c['title']) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
             </div>
 
-            <!-- Chapter Selection (Course -> Chapter -> Video) -->
+            <!-- Subject Selection -->
             <div>
                 <div class="flex items-center justify-between mb-1.5">
-                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Assign To Chapter</label>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Assign To Subject *</label>
+                    <a href="/admin/subjects/" target="_blank" class="text-[10px] text-emerald-600 font-semibold hover:underline flex items-center gap-1">
+                        <i data-lucide="book-open" class="w-3 h-3"></i> Manage Subjects
+                    </a>
+                </div>
+                <select id="video_subject_id" onchange="onSubjectChangedInModal()" required 
+                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                    <option value="">-- Choose Subject --</option>
+                </select>
+            </div>
+
+            <!-- Chapter Selection -->
+            <div>
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Assign To Chapter / Folder</label>
                     <a href="/admin/chapters/" target="_blank" class="text-[10px] text-indigo-600 font-semibold hover:underline flex items-center gap-1">
                         <i data-lucide="layers" class="w-3 h-3"></i> Manage Chapters
                     </a>
@@ -313,6 +376,17 @@ try {
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Lesson Title *</label>
                 <input type="text" id="video_title" required 
                        placeholder="Lesson 1: Introduction to Formulas" 
+                       class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+            </div>
+
+            <!-- PDF Notes / Class Assignment URL -->
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Class PDF Notes / Assignment URL
+                    <span class="text-[10px] text-slate-400 font-normal lowercase">(Optional)</span>
+                </label>
+                <input type="url" id="video_pdf_url" 
+                       placeholder="https://example.com/notes/lesson-1-assignment.pdf" 
                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:bg-white transition">
             </div>
 
@@ -382,310 +456,293 @@ try {
 </div>
 
 <script>
-    function filterVideos() {
-        var query = document.getElementById('videoSearch').value.toLowerCase();
-        var rows = document.querySelectorAll('.video-row');
-        rows.forEach(function(row) {
-            var title = row.getAttribute('data-title') || '';
-            var dmid = row.getAttribute('data-dmid') || '';
-            if (title.includes(query) || dmid.includes(query)) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
-    }
+const allSubjectsData = <?= json_encode($allSubjects) ?>;
+const allChaptersData = <?= json_encode($allChapters) ?>;
 
-    function applyCourseFilter(courseId) {
-        if (courseId > 0) {
-            window.location.href = '/admin/videos/?course_id=' + courseId;
+function filterVideos() {
+    var query = document.getElementById('videoSearch').value.toLowerCase();
+    var rows = document.querySelectorAll('.video-row');
+    rows.forEach(function(row) {
+        var title = row.getAttribute('data-title') || '';
+        var dmid = row.getAttribute('data-dmid') || '';
+        if (title.includes(query) || dmid.includes(query)) {
+            row.style.display = '';
         } else {
-            window.location.href = '/admin/videos/';
+            row.style.display = 'none';
         }
+    });
+}
+
+function applyFilters() {
+    var cId = document.getElementById('courseFilter').value;
+    var sId = document.getElementById('subjectFilter').value;
+    var chEl = document.getElementById('chapterFilter');
+    var chId = chEl ? chEl.value : 0;
+
+    var url = '/admin/videos/?';
+    if (cId > 0) url += 'course_id=' + cId + '&';
+    if (sId > 0) url += 'subject_id=' + sId + '&';
+    if (chId > 0) url += 'chapter_id=' + chId;
+    window.location.href = url.replace(/&$/, '');
+}
+
+function populateModalSubjects(batchId, selectedSubId = 0) {
+    var subSelect = document.getElementById('video_subject_id');
+    subSelect.innerHTML = '<option value="">-- Choose Subject --</option>';
+    
+    var filtered = allSubjectsData.filter(s => batchId == 0 || s.course_id == batchId);
+    filtered.forEach(s => {
+        var opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.title;
+        if (s.id == selectedSubId) opt.selected = true;
+        subSelect.appendChild(opt);
+    });
+}
+
+function populateModalChapters(batchId, subjectId = 0, selectedChId = 0) {
+    var chSelect = document.getElementById('video_chapter_id');
+    chSelect.innerHTML = '<option value="0">-- General (No Specific Chapter) --</option>';
+
+    var filtered = allChaptersData.filter(ch => {
+        if (batchId > 0 && ch.course_id != batchId) return false;
+        if (subjectId > 0 && ch.subject_id > 0 && ch.subject_id != subjectId) return false;
+        return true;
+    });
+
+    filtered.forEach(ch => {
+        var opt = document.createElement('option');
+        opt.value = ch.id;
+        var prefix = (ch.parent_id > 0) ? '  ↳ 📁 ' : '📁 ';
+        opt.textContent = prefix + ch.title;
+        if (ch.id == selectedChId) opt.selected = true;
+        chSelect.appendChild(opt);
+    });
+}
+
+function onBatchChangedInModal() {
+    var bId = parseInt(document.getElementById('video_course_id').value) || 0;
+    populateModalSubjects(bId, 0);
+    populateModalChapters(bId, 0, 0);
+}
+
+function onSubjectChangedInModal() {
+    var bId = parseInt(document.getElementById('video_course_id').value) || 0;
+    var sId = parseInt(document.getElementById('video_subject_id').value) || 0;
+    populateModalChapters(bId, sId, 0);
+}
+
+function openVideoModal() {
+    document.getElementById('video_id').value = '0';
+    document.getElementById('video_title').value = '';
+    document.getElementById('video_dm_id').value = '';
+    document.getElementById('video_pdf_url').value = '';
+    document.getElementById('video_dm_account_id').value = '0';
+    document.getElementById('video_duration').value = '15:00';
+    document.getElementById('video_sort_order').value = '1';
+    document.getElementById('video_is_preview').checked = false;
+    document.getElementById('videoModalTitle').innerText = 'Add Video Lesson';
+    document.getElementById('thumbPreviewBox').classList.add('hidden');
+    document.getElementById('dmFetchStatus').classList.add('hidden');
+
+    var currentBatch = parseInt(document.getElementById('courseFilter').value) || 0;
+    if (currentBatch > 0) {
+        document.getElementById('video_course_id').value = currentBatch;
+    }
+    var currentSub = parseInt(document.getElementById('subjectFilter').value) || 0;
+    populateModalSubjects(currentBatch, currentSub);
+    populateModalChapters(currentBatch, currentSub, 0);
+
+    document.getElementById('videoModal').classList.remove('hidden');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function editVideo(v) {
+    document.getElementById('video_id').value = v.id;
+    document.getElementById('video_course_id').value = v.course_id;
+    populateModalSubjects(v.course_id, v.subject_id || 0);
+    populateModalChapters(v.course_id, v.subject_id || 0, v.chapter_id || 0);
+
+    document.getElementById('video_dm_account_id').value = v.dm_account_id || 0;
+    document.getElementById('video_title').value = v.title || '';
+    document.getElementById('video_dm_id').value = v.dailymotion_id || '';
+    document.getElementById('video_pdf_url').value = v.pdf_url || '';
+    document.getElementById('video_duration').value = v.duration || '15:00';
+    document.getElementById('video_sort_order').value = v.sort_order || 1;
+    document.getElementById('video_is_preview').checked = v.is_free_preview == 1;
+    document.getElementById('videoModalTitle').innerText = 'Edit Video Lesson';
+    document.getElementById('thumbPreviewBox').classList.add('hidden');
+    document.getElementById('dmFetchStatus').classList.add('hidden');
+    document.getElementById('videoModal').classList.remove('hidden');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function closeVideoModal() {
+    document.getElementById('videoModal').classList.add('hidden');
+}
+
+function autoFetchOnBlur() {
+    var dmId = document.getElementById('video_dm_id').value.trim();
+    var currentTitle = document.getElementById('video_title').value.trim();
+    if (dmId && !currentTitle) {
+        fetchDailymotionDetails();
+    }
+}
+
+async function fetchDailymotionDetails() {
+    var rawInput = document.getElementById('video_dm_id').value.trim();
+    if (!rawInput) {
+        if (typeof showToast === 'function') showToast('Please enter a Dailymotion Video ID or URL first', 'error');
+        else alert('Please enter a Dailymotion Video ID or URL first');
+        return;
     }
 
-    function applyChapterFilter(chapterId) {
-        var courseId = document.getElementById('courseFilter').value;
-        var url = '/admin/videos/?';
-        if (courseId > 0) url += 'course_id=' + courseId;
-        if (chapterId > 0) url += (courseId > 0 ? '&' : '') + 'chapter_id=' + chapterId;
-        window.location.href = url;
-    }
+    var btn = document.getElementById('btnAutoFetch');
+    var statusEl = document.getElementById('dmFetchStatus');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> <span>Fetching...</span>';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    async function loadChaptersForCourse(courseId, selectedChapterId = 0) {
-        var select = document.getElementById('video_chapter_id');
-        select.innerHTML = '<option value="0">-- General (No Specific Chapter) --</option>';
-        if (!courseId || courseId <= 0) return;
-        try {
-            var res = await fetch('/api/admin_crud.php?action=list_chapters&course_id=' + courseId);
-            var json = await res.json();
-            if (json.status && json.data) {
-                json.data.forEach(function(ch) {
-                    var opt = document.createElement('option');
-                    opt.value = ch.id;
-                    opt.textContent = ch.title;
-                    if (ch.id == selectedChapterId) opt.selected = true;
-                    select.appendChild(opt);
-                });
+    statusEl.className = 'text-[11px] mt-1.5 text-indigo-600 font-medium block';
+    statusEl.innerText = 'Connecting to Dailymotion API with owner credentials...';
+
+    try {
+        var accId = document.getElementById('video_dm_account_id').value;
+        var res = await fetch('/api/admin_crud.php?action=fetch_dm_info&dailymotion_id=' + encodeURIComponent(rawInput) + '&account_id=' + encodeURIComponent(accId));
+        var json = await res.json();
+
+        if (json.status && json.data) {
+            var d = json.data;
+            document.getElementById('video_dm_id').value = d.id;
+            if (d.account_id) {
+                document.getElementById('video_dm_account_id').value = d.account_id;
             }
-        } catch (e) {}
-    }
-
-    function onCourseChanged(courseId) {
-        loadChaptersForCourse(courseId, 0);
-    }
-
-    function openVideoModal() {
-        document.getElementById('video_id').value = '0';
-        document.getElementById('video_title').value = '';
-        document.getElementById('video_dm_id').value = '';
-        document.getElementById('video_dm_account_id').value = '0';
-        document.getElementById('video_duration').value = '15:00';
-        document.getElementById('video_sort_order').value = '1';
-        document.getElementById('video_is_preview').checked = false;
-        document.getElementById('videoModalTitle').innerText = 'Add Video Lesson';
-        document.getElementById('thumbPreviewBox').classList.add('hidden');
-        document.getElementById('dmFetchStatus').classList.add('hidden');
-
-        var currentCourse = document.getElementById('video_course_id').value;
-        loadChaptersForCourse(currentCourse, <?= $selectedChapterId ?>);
-
-        document.getElementById('videoModal').classList.remove('hidden');
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    function editVideo(v) {
-        document.getElementById('video_id').value = v.id;
-        document.getElementById('video_course_id').value = v.course_id;
-        document.getElementById('video_dm_account_id').value = v.dm_account_id || 0;
-        loadChaptersForCourse(v.course_id, v.chapter_id || 0);
-        document.getElementById('video_title').value = v.title || '';
-        document.getElementById('video_dm_id').value = v.dailymotion_id || '';
-        document.getElementById('video_duration').value = v.duration || '15:00';
-        document.getElementById('video_sort_order').value = v.sort_order || 1;
-        document.getElementById('video_is_preview').checked = v.is_free_preview == 1;
-        document.getElementById('videoModalTitle').innerText = 'Edit Video Lesson';
-        document.getElementById('thumbPreviewBox').classList.add('hidden');
-        document.getElementById('dmFetchStatus').classList.add('hidden');
-        document.getElementById('videoModal').classList.remove('hidden');
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    function closeVideoModal() {
-        document.getElementById('videoModal').classList.add('hidden');
-    }
-
-    // Auto-fetch trigger on blur if field has value and title is still empty
-    function autoFetchOnBlur() {
-        var dmId = document.getElementById('video_dm_id').value.trim();
-        var currentTitle = document.getElementById('video_title').value.trim();
-        if (dmId && !currentTitle) {
-            fetchDailymotionDetails();
-        }
-    }
-
-    // AUTO-FETCH DURATION & TITLE FROM DAILYMOTION API
-    async function fetchDailymotionDetails() {
-        var rawInput = document.getElementById('video_dm_id').value.trim();
-        if (!rawInput) {
-            showToast('Please enter a Dailymotion Video ID or URL first', 'error');
-            return;
-        }
-
-        var btn = document.getElementById('btnAutoFetch');
-        var statusEl = document.getElementById('dmFetchStatus');
-        btn.disabled = true;
-        btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> <span>Fetching...</span>';
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-
-        statusEl.className = 'text-[11px] mt-1.5 text-indigo-600 font-medium block';
-        statusEl.innerText = 'Connecting to Dailymotion API with owner credentials...';
-
-        try {
-            var accId = document.getElementById('video_dm_account_id').value;
-            var res = await fetch('/api/admin_crud.php?action=fetch_dm_info&dailymotion_id=' + encodeURIComponent(rawInput) + '&account_id=' + encodeURIComponent(accId));
-            var json = await res.json();
-
-            if (json.status && json.data) {
-                var d = json.data;
-                // Auto-fill Clean ID
-                document.getElementById('video_dm_id').value = d.id;
-                // Auto-set Account if detected
-                if (d.account_id) {
-                    document.getElementById('video_dm_account_id').value = d.account_id;
-                }
-                // Auto-fill Title
-                if (d.title) {
-                    document.getElementById('video_title').value = d.title;
-                }
-                // Auto-fill Duration (Formatted HH:MM:SS)
-                if (d.duration) {
-                    document.getElementById('video_duration').value = d.duration;
-                }
-                // Show thumbnail & verification box
-                if (d.thumbnail) {
-                    document.getElementById('thumbImg').src = d.thumbnail;
-                    document.getElementById('thumbTextTitle').innerText = d.title || d.id;
-                    document.getElementById('thumbPreviewBox').classList.remove('hidden');
-                }
-
-                statusEl.className = 'text-[11px] mt-1.5 text-emerald-600 font-semibold block';
-                statusEl.innerText = '✓ Found in ' + (d.account_name || 'Dailymotion') + ' • Duration ' + d.duration + ' (' + (d.private ? 'Private Video' : 'Public') + ')';
-                showToast('Video title & duration (' + d.duration + ') auto-calculated from ' + (d.account_name || 'Dailymotion'), 'success');
-            } else {
-                // Direct client-side fallback if server proxy had network/firewall issue
-                var cleanId = rawInput.trim();
-                var m = cleanId.match(/(?:dailymotion\.com\/(?:video|hub)\/|dai\.ly\/)([a-zA-Z0-9]+)/);
-                if (m) cleanId = m[1];
-                var token = (json && json.data && json.data._token) ? json.data._token : '';
-
-                statusEl.innerText = 'Server proxy busy, trying direct browser connection...';
-                try {
-                    var dHeaders = { 'Accept': 'application/json' };
-                    if (token) dHeaders['Authorization'] = 'Bearer ' + token;
-                    var dRes = await fetch('https://api.dailymotion.com/video/' + cleanId + '?fields=id,title,duration,thumbnail_url,private', {
-                        headers: dHeaders
-                    });
-                    var dJson = await dRes.json();
-                    if (dJson && dJson.id) {
-                        var secs = parseInt(dJson.duration || 0);
-                        var hrs = Math.floor(secs / 3600);
-                        var mins = Math.floor((secs % 3600) / 60);
-                        var s = secs % 60;
-                        var fmt = (hrs > 0 ? String(hrs).padStart(2,'0') + ':' : '') + String(mins).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-
-                        document.getElementById('video_dm_id').value = dJson.id;
-                        if (dJson.title) document.getElementById('video_title').value = dJson.title;
-                        document.getElementById('video_duration').value = fmt;
-                        if (dJson.thumbnail_url) {
-                            document.getElementById('thumbImg').src = dJson.thumbnail_url;
-                            document.getElementById('thumbTextTitle').innerText = dJson.title || dJson.id;
-                            document.getElementById('thumbPreviewBox').classList.remove('hidden');
-                        }
-                        statusEl.className = 'text-[11px] mt-1.5 text-emerald-600 font-semibold block';
-                        statusEl.innerText = '✓ Success! Duration ' + fmt + ' auto-calculated (' + (dJson.private ? 'Private' : 'Public') + ')';
-                        showToast('Video title & duration (' + fmt + ') auto-calculated!', 'success');
-                        return;
-                    }
-                } catch (e) {
-                    console.log('Direct browser fetch error:', e);
-                }
-
-                statusEl.className = 'text-[11px] mt-1.5 text-rose-600 font-semibold block';
-                statusEl.innerText = '✕ ' + (json.message || 'Could not fetch details');
-                showToast(json.message || 'Could not fetch video info', 'error');
+            if (d.title) {
+                document.getElementById('video_title').value = d.title;
             }
-        } catch (err) {
+            if (d.duration) {
+                document.getElementById('video_duration').value = d.duration;
+            }
+            if (d.thumbnail) {
+                document.getElementById('thumbImg').src = d.thumbnail;
+                document.getElementById('thumbTextTitle').innerText = d.title || d.id;
+                document.getElementById('thumbPreviewBox').classList.remove('hidden');
+            }
+
+            statusEl.className = 'text-[11px] mt-1.5 text-emerald-600 font-semibold block';
+            statusEl.innerText = '✓ Found in ' + (d.account_name || 'Dailymotion') + ' • Duration ' + d.duration + ' (' + (d.private ? 'Private Video' : 'Public') + ')';
+        } else {
             statusEl.className = 'text-[11px] mt-1.5 text-rose-600 font-semibold block';
-            statusEl.innerText = '✕ Network error while fetching Dailymotion info';
-            showToast('Network error connecting to Dailymotion', 'error');
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i> <span>Auto Fetch</span>';
-            if (typeof lucide !== 'undefined') lucide.createIcons();
+            statusEl.innerText = '✕ ' + (json.message || 'Could not fetch details');
         }
+    } catch (err) {
+        statusEl.className = 'text-[11px] mt-1.5 text-rose-600 font-semibold block';
+        statusEl.innerText = '✕ Network error while fetching Dailymotion info';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i> <span>Auto Fetch</span>';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
+}
 
-    async function handleSaveVideo(e) {
-        e.preventDefault();
-        var btn = document.getElementById('btnSubmitVideo');
-        btn.disabled = true;
-        btn.innerText = 'Saving...';
+async function handleSaveVideo(e) {
+    e.preventDefault();
+    var btn = document.getElementById('btnSubmitVideo');
+    btn.disabled = true;
+    btn.innerText = 'Saving...';
 
-        var payload = {
-            id: document.getElementById('video_id').value,
-            course_id: document.getElementById('video_course_id').value,
-            chapter_id: document.getElementById('video_chapter_id').value,
-            dm_account_id: document.getElementById('video_dm_account_id').value,
-            title: document.getElementById('video_title').value,
-            dailymotion_id: document.getElementById('video_dm_id').value,
-            duration: document.getElementById('video_duration').value,
-            sort_order: document.getElementById('video_sort_order').value,
-            is_free_preview: document.getElementById('video_is_preview').checked ? 1 : 0
-        };
+    var payload = {
+        id: document.getElementById('video_id').value,
+        course_id: document.getElementById('video_course_id').value,
+        subject_id: document.getElementById('video_subject_id').value,
+        chapter_id: document.getElementById('video_chapter_id').value,
+        dm_account_id: document.getElementById('video_dm_account_id').value,
+        title: document.getElementById('video_title').value,
+        dailymotion_id: document.getElementById('video_dm_id').value,
+        duration: document.getElementById('video_duration').value,
+        pdf_url: document.getElementById('video_pdf_url').value,
+        sort_order: document.getElementById('video_sort_order').value,
+        is_free_preview: document.getElementById('video_is_preview').checked ? 1 : 0
+    };
 
-        try {
-            var res = await fetch('/api/admin_crud.php?action=save_video', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            var json = await res.json();
-            if (json.status) {
-                showToast(json.message, 'success');
-                setTimeout(() => window.location.reload(), 800);
-            } else {
-                showToast(json.message || 'Failed to save video', 'error');
-            }
-        } catch (err) {
-            showToast('Network error while saving video', 'error');
-        } finally {
+    try {
+        var res = await fetch('/api/admin_crud.php?action=save_video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        var json = await res.json();
+        if (json.status) {
+            window.location.reload();
+        } else {
+            alert(json.message || 'Failed to save video');
             btn.disabled = false;
             btn.innerText = 'Save Video';
         }
+    } catch (err) {
+        alert('Network error while saving video: ' + err.message);
+        btn.disabled = false;
+        btn.innerText = 'Save Video';
     }
+}
 
-    async function deleteVideo(id, title) {
-        if (!confirm('Are you sure you want to delete lesson: "' + title + '"?')) return;
+async function deleteVideo(id, title) {
+    if (!confirm('Are you sure you want to delete lesson: "' + title + '"?')) return;
 
-        try {
-            var res = await fetch('/api/admin_crud.php?action=delete_video', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: id })
-            });
-            var json = await res.json();
-            if (json.status) {
-                showToast(json.message, 'success');
-                setTimeout(() => window.location.reload(), 800);
-            } else {
-                showToast(json.message || 'Failed to delete video', 'error');
-            }
-        } catch (err) {
-            showToast('Network error deleting video', 'error');
+    try {
+        var res = await fetch('/api/admin_crud.php?action=delete_video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id })
+        });
+        var json = await res.json();
+        if (json.status) {
+            window.location.reload();
+        } else {
+            alert(json.message || 'Failed to delete video');
         }
+    } catch (err) {
+        alert('Network error deleting video: ' + err.message);
     }
+}
 
-    // Playback Preview
-    async function previewVideo(dmId, title) {
-        document.getElementById('previewTitle').innerText = title + ' (' + dmId + ')';
-        var container = document.getElementById('previewContainer');
-        container.innerHTML = '<div class="w-full h-full flex items-center justify-center text-white text-xs">Loading secure stream...</div>';
-        document.getElementById('previewModal').classList.remove('hidden');
+async function previewVideo(dmId, title) {
+    document.getElementById('previewTitle').innerText = title + ' (' + dmId + ')';
+    var container = document.getElementById('previewContainer');
+    container.innerHTML = '<div class="w-full h-full flex items-center justify-center text-white text-xs">Loading secure stream...</div>';
+    document.getElementById('previewModal').classList.remove('hidden');
 
-        try {
-            var res = await fetch('/api/video.php?id=' + encodeURIComponent(dmId));
-            var json = await res.json();
-            if (json.status && json.data && json.data.embed_url) {
-                container.innerHTML = '<iframe src="' + json.data.embed_url + '" class="w-full h-full" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>';
-            } else {
-                container.innerHTML = '<div class="w-full h-full flex items-center justify-center text-rose-400 text-xs p-4 text-center">' + (json.message || 'Could not load private stream') + '</div>';
-            }
-        } catch (e) {
-            container.innerHTML = '<div class="w-full h-full flex items-center justify-center text-rose-400 text-xs">Failed to connect to playback endpoint</div>';
+    try {
+        var res = await fetch('/api/video.php?id=' + encodeURIComponent(dmId));
+        var json = await res.json();
+        if (json.status && json.data && json.data.embed_url) {
+            container.innerHTML = '<iframe src="' + json.data.embed_url + '" class="w-full h-full" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>';
+        } else {
+            container.innerHTML = '<div class="w-full h-full flex items-center justify-center text-rose-400 text-xs p-4 text-center">' + (json.message || 'Could not load private stream') + '</div>';
         }
+    } catch (e) {
+        container.innerHTML = '<div class="w-full h-full flex items-center justify-center text-rose-400 text-xs">Failed to connect to playback endpoint</div>';
     }
+}
 
-    function closePreviewModal() {
-        document.getElementById('previewContainer').innerHTML = '';
-        document.getElementById('previewModal').classList.add('hidden');
-    }
+function closePreviewModal() {
+    document.getElementById('previewContainer').innerHTML = '';
+    document.getElementById('previewModal').classList.add('hidden');
+}
 
-    // Auto open modal if ?new=1
-    if (window.location.search.includes('new=1')) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlCourseId = urlParams.get('course_id');
-        const urlChId = urlParams.get('chapter_id');
-        if (urlCourseId) {
-            document.getElementById('video_course_id').value = urlCourseId;
-        }
-        openVideoModal();
-        if (urlCourseId && urlChId) {
-            setTimeout(() => {
-                loadChaptersForCourse(urlCourseId, urlChId);
-            }, 150);
-        }
+// Auto open modal if ?new=1
+if (window.location.search.includes('new=1')) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCourseId = urlParams.get('course_id');
+    const urlSubId = urlParams.get('subject_id');
+    const urlChId = urlParams.get('chapter_id');
+    openVideoModal();
+    if (urlCourseId) {
+        document.getElementById('video_course_id').value = urlCourseId;
+        populateModalSubjects(urlCourseId, urlSubId || 0);
+        populateModalChapters(urlCourseId, urlSubId || 0, urlChId || 0);
     }
+}
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

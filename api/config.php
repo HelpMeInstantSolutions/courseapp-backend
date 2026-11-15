@@ -73,16 +73,34 @@ function initDatabase($pdo) {
             description TEXT,
             thumbnail TEXT,
             price REAL DEFAULT 0.00,
+            validity TEXT DEFAULT '1 Year',
+            faculty_name TEXT,
             status INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
         );
 
-        CREATE TABLE IF NOT EXISTS chapters (
+        CREATE TABLE IF NOT EXISTS subjects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             course_id INTEGER NOT NULL,
             title TEXT NOT NULL,
+            faculty_name TEXT,
+            thumbnail TEXT,
             description TEXT,
+            sort_order INTEGER DEFAULT 1,
+            status INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS chapters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            course_id INTEGER NOT NULL,
+            subject_id INTEGER DEFAULT 0,
+            parent_id INTEGER DEFAULT 0,
+            title TEXT NOT NULL,
+            description TEXT,
+            pdf_url TEXT,
             sort_order INTEGER DEFAULT 1,
             status INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -108,17 +126,31 @@ function initDatabase($pdo) {
         CREATE TABLE IF NOT EXISTS videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             course_id INTEGER NOT NULL,
+            subject_id INTEGER DEFAULT 0,
             chapter_id INTEGER DEFAULT 0,
             dm_account_id INTEGER DEFAULT 0,
             title TEXT NOT NULL,
             description TEXT,
             dailymotion_id TEXT NOT NULL,
             duration TEXT DEFAULT '15:00',
+            pdf_url TEXT,
             sort_order INTEGER DEFAULT 1,
             is_free_preview INTEGER DEFAULT 0,
             status INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS user_video_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            video_id INTEGER NOT NULL,
+            last_position_seconds INTEGER DEFAULT 0,
+            duration_seconds INTEGER DEFAULT 0,
+            percent_watched INTEGER DEFAULT 0,
+            is_completed INTEGER DEFAULT 0,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, video_id)
         );
     ");
 
@@ -128,14 +160,32 @@ function initDatabase($pdo) {
         if (!in_array('chapter_id', $videoCols)) {
             $pdo->exec("ALTER TABLE videos ADD COLUMN chapter_id INTEGER DEFAULT 0");
         }
+        if (!in_array('subject_id', $videoCols)) {
+            $pdo->exec("ALTER TABLE videos ADD COLUMN subject_id INTEGER DEFAULT 0");
+        }
         if (!in_array('dm_account_id', $videoCols)) {
             $pdo->exec("ALTER TABLE videos ADD COLUMN dm_account_id INTEGER DEFAULT 0");
+        }
+        if (!in_array('pdf_url', $videoCols)) {
+            $pdo->exec("ALTER TABLE videos ADD COLUMN pdf_url TEXT");
+        }
+        if (!in_array('is_free_preview', $videoCols)) {
+            $pdo->exec("ALTER TABLE videos ADD COLUMN is_free_preview INTEGER DEFAULT 0");
         }
     } catch (Exception $e) {}
 
     // Migrations for chapters table
     try {
         $chCols = $pdo->query("PRAGMA table_info(chapters)")->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('subject_id', $chCols)) {
+            $pdo->exec("ALTER TABLE chapters ADD COLUMN subject_id INTEGER DEFAULT 0");
+        }
+        if (!in_array('parent_id', $chCols)) {
+            $pdo->exec("ALTER TABLE chapters ADD COLUMN parent_id INTEGER DEFAULT 0");
+        }
+        if (!in_array('pdf_url', $chCols)) {
+            $pdo->exec("ALTER TABLE chapters ADD COLUMN pdf_url TEXT");
+        }
         if (!in_array('status', $chCols)) {
             $pdo->exec("ALTER TABLE chapters ADD COLUMN status INTEGER DEFAULT 1");
         }
@@ -149,6 +199,35 @@ function initDatabase($pdo) {
         $courseCols = $pdo->query("PRAGMA table_info(courses)")->fetchAll(PDO::FETCH_COLUMN, 1);
         if (!in_array('status', $courseCols)) {
             $pdo->exec("ALTER TABLE courses ADD COLUMN status INTEGER DEFAULT 1");
+        }
+        if (!in_array('validity', $courseCols)) {
+            $pdo->exec("ALTER TABLE courses ADD COLUMN validity TEXT DEFAULT '1 Year'");
+        }
+        if (!in_array('faculty_name', $courseCols)) {
+            $pdo->exec("ALTER TABLE courses ADD COLUMN faculty_name TEXT");
+        }
+    } catch (Exception $e) {}
+
+    // Auto-migrate existing data to Batch -> Subject -> Chapter hierarchy
+    try {
+        $orphanCourses = $pdo->query("SELECT DISTINCT course_id FROM chapters WHERE subject_id = 0 OR subject_id IS NULL")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($orphanCourses as $cId) {
+            $subCheck = $pdo->prepare("SELECT id FROM subjects WHERE course_id = ? ORDER BY id ASC LIMIT 1");
+            $subCheck->execute([$cId]);
+            $subId = $subCheck->fetchColumn();
+
+            if (!$subId) {
+                $cTitle = $pdo->query("SELECT title FROM courses WHERE id = " . (int)$cId)->fetchColumn() ?: 'Main Subject';
+                $subTitle = (stripos($cTitle, 'Math') !== false) ? 'Mathematics' : $cTitle;
+                $insSub = $pdo->prepare("INSERT INTO subjects (course_id, title, faculty_name, sort_order, status) VALUES (?, ?, 'Bhutesh Sir', 1, 1)");
+                $insSub->execute([$cId, $subTitle]);
+                $subId = $pdo->lastInsertId();
+            }
+
+            if ($subId) {
+                $pdo->prepare("UPDATE chapters SET subject_id = ? WHERE course_id = ? AND (subject_id = 0 OR subject_id IS NULL)")->execute([$subId, $cId]);
+                $pdo->prepare("UPDATE videos SET subject_id = ? WHERE course_id = ? AND (subject_id = 0 OR subject_id IS NULL)")->execute([$subId, $cId]);
+            }
         }
     } catch (Exception $e) {}
 
