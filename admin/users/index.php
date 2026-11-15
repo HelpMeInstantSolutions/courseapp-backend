@@ -295,41 +295,95 @@ try {
 <div id="assignModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-            <h3 class="text-sm font-extrabold text-slate-900">Assign Batch / Subject Access</h3>
+            <div>
+                <h3 class="text-sm font-extrabold text-slate-900">Assign Batch / Subject Access</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Assign multiple batches or select multiple individual subjects</p>
+            </div>
             <button onclick="closeAssignModal()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
         </div>
-        <form onsubmit="handleAssignSubmit(event)" class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <form onsubmit="handleAssignSubmit(event)" class="p-6 space-y-4 max-h-[82vh] overflow-y-auto">
             <input type="hidden" id="assignUserId" value="0">
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assigning Access To</label>
                 <p id="assignStudentName" class="text-xs font-semibold text-indigo-700 bg-indigo-50 px-3 py-2 rounded-xl"></p>
             </div>
 
-            <!-- Batch Dropdown -->
-            <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Select Batch *</label>
-                <select id="assignCourseId" required onchange="onAssignBatchChanged()" 
-                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
-                    <option value="">-- Choose Batch --</option>
-                    <?php foreach ($courses as $c): ?>
-                        <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['title']) ?></option>
-                    <?php endforeach; ?>
-                </select>
+            <!-- Mode Switcher Tabs -->
+            <div class="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+                <button type="button" id="tabModeSingle" onclick="switchAssignMode('single')"
+                        class="flex-1 py-1.5 text-xs font-bold rounded-lg transition bg-white text-indigo-600 shadow-sm">
+                    Specific Batch &amp; Subjects
+                </button>
+                <button type="button" id="tabModeMulti" onclick="switchAssignMode('multi')"
+                        class="flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-500 hover:text-slate-800">
+                    Multiple Batches at Once
+                </button>
             </div>
 
-            <!-- Subject Dropdown -->
-            <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Select Subject Scope</label>
-                <select id="assignSubjectId" 
-                        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
-                    <option value="0">⭐ All Subjects in this Batch (Full Course Access)</option>
-                </select>
-                <p class="text-[10px] text-slate-400 mt-1">Choose "All Subjects" or pick a specific subject (e.g. only Mathematics by Bhutesh Sir)</p>
+            <!-- PANE 1: SINGLE BATCH WITH MULTI-SUBJECT CHECKBOXES -->
+            <div id="paneAssignSingle" class="space-y-3.5">
+                <!-- Batch Dropdown -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Select Batch *</label>
+                    <select id="assignCourseId" onchange="onAssignBatchChanged()" 
+                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                        <option value="">-- Choose Batch --</option>
+                        <?php foreach ($courses as $c): ?>
+                            <option value="<?= $c['id'] ?>"><?= htmlspecialchars($c['title']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Subjects Selection Container -->
+                <div id="subjectsSection" class="hidden">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Select Subjects</label>
+                        <span class="text-[10px] text-indigo-600 font-semibold" id="subjectsCountHint">All or specific</span>
+                    </div>
+
+                    <!-- All Subjects Master Option -->
+                    <label class="flex items-center gap-2.5 p-2.5 rounded-xl border border-indigo-200 bg-indigo-50/60 cursor-pointer mb-2 hover:bg-indigo-50 transition">
+                        <input type="checkbox" id="cbAllSubjects" onchange="onAllSubjectsToggled()" checked
+                               class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500">
+                        <div class="text-xs">
+                            <span class="font-bold text-indigo-900">⭐ All Subjects in this Batch</span>
+                            <span class="text-[10px] text-indigo-600 block">Full course access (all current &amp; future subjects)</span>
+                        </div>
+                    </label>
+
+                    <!-- Individual Subjects List (Checkboxes) -->
+                    <div id="individualSubjectsContainer" class="hidden space-y-1.5 max-h-44 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
             </div>
 
-            <!-- Validity Selector -->
+            <!-- PANE 2: MULTI-BATCH CHECKBOXES -->
+            <div id="paneAssignMulti" class="hidden space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Select Multiple Batches *</label>
+                    <button type="button" onclick="toggleSelectAllBatches()" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800">
+                        Select / Unselect All
+                    </button>
+                </div>
+                <div class="space-y-1.5 max-h-52 overflow-y-auto p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                    <?php if (empty($courses)): ?>
+                        <p class="text-xs text-slate-400 p-2">No batches available.</p>
+                    <?php else: ?>
+                        <?php foreach ($courses as $c): ?>
+                            <label class="flex items-center gap-2.5 p-2 rounded-lg bg-white border border-slate-200/80 hover:border-indigo-300 cursor-pointer transition">
+                                <input type="checkbox" class="multi-batch-cb w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" value="<?= $c['id'] ?>">
+                                <span class="text-xs font-bold text-slate-800">🎓 <?= htmlspecialchars($c['title']) ?></span>
+                            </label>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+                <p class="text-[10px] text-slate-400">All selected batches will be assigned full access with the validity set below.</p>
+            </div>
+
+            <!-- Common Validity Selector -->
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Access Validity</label>
                 <div class="grid grid-cols-4 gap-2 mb-2">
@@ -472,12 +526,42 @@ async function toggleUserStatus(userId, newStatus) {
     }
 }
 
+let currentAssignMode = 'single';
+
+function switchAssignMode(mode) {
+    currentAssignMode = mode;
+    const tabSingle = document.getElementById('tabModeSingle');
+    const tabMulti = document.getElementById('tabModeMulti');
+    const paneSingle = document.getElementById('paneAssignSingle');
+    const paneMulti = document.getElementById('paneAssignMulti');
+
+    if (mode === 'single') {
+        tabSingle.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition bg-white text-indigo-600 shadow-sm';
+        tabMulti.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-500 hover:text-slate-800';
+        paneSingle.classList.remove('hidden');
+        paneMulti.classList.add('hidden');
+    } else {
+        tabMulti.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition bg-white text-indigo-600 shadow-sm';
+        tabSingle.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-500 hover:text-slate-800';
+        paneMulti.classList.remove('hidden');
+        paneSingle.classList.add('hidden');
+    }
+}
+
 function openAssignModal(u) {
     document.getElementById('assignUserId').value = u.id;
     document.getElementById('assignStudentName').innerText = u.name + ' (' + u.email + ')';
     document.getElementById('assignCourseId').value = '';
-    document.getElementById('assignSubjectId').innerHTML = '<option value="0">⭐ All Subjects in this Batch (Full Course Access)</option>';
+    document.getElementById('subjectsSection').classList.add('hidden');
+    document.getElementById('cbAllSubjects').checked = true;
+    document.getElementById('individualSubjectsContainer').classList.add('hidden');
+    document.getElementById('individualSubjectsContainer').innerHTML = '';
     document.getElementById('assignValidityDate').value = '';
+
+    // Uncheck all multi-batches
+    document.querySelectorAll('.multi-batch-cb').forEach(cb => cb.checked = false);
+
+    switchAssignMode('single');
     document.getElementById('assignModal').classList.remove('hidden');
 }
 
@@ -487,18 +571,56 @@ function closeAssignModal() {
 
 function onAssignBatchChanged() {
     const courseId = parseInt(document.getElementById('assignCourseId').value) || 0;
-    const subSelect = document.getElementById('assignSubjectId');
-    subSelect.innerHTML = '<option value="0">⭐ All Subjects in this Batch (Full Course Access)</option>';
+    const subjectsSection = document.getElementById('subjectsSection');
+    const container = document.getElementById('individualSubjectsContainer');
+    const cbAll = document.getElementById('cbAllSubjects');
+    const hint = document.getElementById('subjectsCountHint');
 
-    if (courseId > 0) {
-        const filtered = allSubjectsList.filter(s => s.course_id == courseId);
-        filtered.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id;
-            opt.textContent = '📚 ' + s.title;
-            subSelect.appendChild(opt);
-        });
+    if (courseId <= 0) {
+        subjectsSection.classList.add('hidden');
+        container.innerHTML = '';
+        return;
     }
+
+    subjectsSection.classList.remove('hidden');
+    cbAll.checked = true;
+    container.classList.add('hidden');
+    container.innerHTML = '';
+
+    const filtered = allSubjectsList.filter(s => s.course_id == courseId);
+    hint.innerText = filtered.length + ' subjects available';
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-400 p-2 italic">No individual subjects created yet in this batch.</p>';
+        return;
+    }
+
+    filtered.forEach(s => {
+        const label = document.createElement('label');
+        label.className = 'flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-200/80 hover:border-indigo-300 cursor-pointer text-xs font-medium text-slate-800 transition';
+        label.innerHTML = `
+            <input type="checkbox" class="single-sub-cb w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500" value="${s.id}" checked>
+            <span>📚 ${s.title}</span>
+        `;
+        container.appendChild(label);
+    });
+}
+
+function onAllSubjectsToggled() {
+    const cbAll = document.getElementById('cbAllSubjects');
+    const container = document.getElementById('individualSubjectsContainer');
+    if (cbAll.checked) {
+        container.classList.add('hidden');
+    } else {
+        container.classList.remove('hidden');
+    }
+}
+
+function toggleSelectAllBatches() {
+    const cbs = document.querySelectorAll('.multi-batch-cb');
+    if (cbs.length === 0) return;
+    const allChecked = Array.from(cbs).every(cb => cb.checked);
+    cbs.forEach(cb => cb.checked = !allChecked);
 }
 
 function setValidityPreset(preset) {
@@ -524,21 +646,53 @@ async function handleAssignSubmit(e) {
     btn.disabled = true;
     btn.innerText = 'Granting...';
 
-    const userId = document.getElementById('assignUserId').value;
-    const courseId = document.getElementById('assignCourseId').value;
-    const subjectId = document.getElementById('assignSubjectId').value;
+    const userId = parseInt(document.getElementById('assignUserId').value) || 0;
     const validityDate = document.getElementById('assignValidityDate').value;
+
+    let payload = {
+        user_id: userId,
+        validity_date: validityDate
+    };
+
+    if (currentAssignMode === 'multi') {
+        const checkedBatches = Array.from(document.querySelectorAll('.multi-batch-cb:checked')).map(cb => parseInt(cb.value));
+        if (checkedBatches.length === 0) {
+            alert('Please check at least one batch to assign.');
+            btn.disabled = false;
+            btn.innerText = 'Grant Access';
+            return;
+        }
+        payload.course_ids = checkedBatches;
+    } else {
+        const courseId = parseInt(document.getElementById('assignCourseId').value) || 0;
+        if (courseId <= 0) {
+            alert('Please choose a batch.');
+            btn.disabled = false;
+            btn.innerText = 'Grant Access';
+            return;
+        }
+        payload.course_id = courseId;
+
+        const isAll = document.getElementById('cbAllSubjects').checked;
+        if (isAll) {
+            payload.subject_ids = [0]; // 0 = Full batch access
+        } else {
+            const checkedSubs = Array.from(document.querySelectorAll('.single-sub-cb:checked')).map(cb => parseInt(cb.value));
+            if (checkedSubs.length === 0) {
+                alert('Please select at least one subject, or check "All Subjects in this Batch".');
+                btn.disabled = false;
+                btn.innerText = 'Grant Access';
+                return;
+            }
+            payload.subject_ids = checkedSubs;
+        }
+    }
 
     try {
         const res = await fetch('/api/admin_crud.php?action=assign_user_enrollment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: userId,
-                course_id: courseId,
-                subject_id: subjectId,
-                validity_date: validityDate
-            })
+            body: JSON.stringify(payload)
         });
         const json = await res.json();
         if (json.status) {

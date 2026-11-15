@@ -615,30 +615,96 @@ switch ($action) {
 
     case 'assign_user_enrollment':
         $userId = (int)($input['user_id'] ?? 0);
-        $courseId = (int)($input['course_id'] ?? 0);
-        $subjectId = (int)($input['subject_id'] ?? 0); // 0 = all subjects in batch
-        $validityDate = trim($input['validity_date'] ?? ''); // YYYY-MM-DD or empty for lifetime
-
-        if ($userId <= 0 || $courseId <= 0) {
-            sendResponse(false, "Student and Batch selection are required", null, 400);
-        }
-
+        $validityDate = trim($input['validity_date'] ?? '');
         $valDate = (!empty($validityDate) && $validityDate !== 'lifetime') ? $validityDate : null;
 
-        // Check if enrollment already exists
-        $chk = $pdo->prepare("SELECT id FROM user_enrollments WHERE user_id = ? AND course_id = ? AND subject_id = ?");
-        $chk->execute([$userId, $courseId, $subjectId]);
-        $existingId = $chk->fetchColumn();
-
-        if ($existingId) {
-            $up = $pdo->prepare("UPDATE user_enrollments SET validity_date = ?, status = 1 WHERE id = ?");
-            $up->execute([$valDate, $existingId]);
-            sendResponse(true, "Enrollment validity updated successfully!");
-        } else {
-            $ins = $pdo->prepare("INSERT INTO user_enrollments (user_id, course_id, subject_id, validity_date, status) VALUES (?, ?, ?, ?, 1)");
-            $ins->execute([$userId, $courseId, $subjectId, $valDate]);
-            sendResponse(true, "Batch / Subject assigned to student successfully!");
+        if ($userId <= 0) {
+            sendResponse(false, "Student selection is required", null, 400);
         }
+
+        // Mode 1: Multiple Batches (Bulk course_ids)
+        if (!empty($input['course_ids']) && is_array($input['course_ids'])) {
+            $courseIds = array_filter(array_map('intval', $input['course_ids']));
+            if (empty($courseIds)) {
+                sendResponse(false, "Please select at least one batch", null, 400);
+            }
+            $count = 0;
+            foreach ($courseIds as $cId) {
+                if ($cId <= 0) continue;
+                // Check if full batch enrollment already exists
+                $chk = $pdo->prepare("SELECT id FROM user_enrollments WHERE user_id = ? AND course_id = ? AND subject_id = 0");
+                $chk->execute([$userId, $cId]);
+                $existingId = $chk->fetchColumn();
+                if ($existingId) {
+                    $up = $pdo->prepare("UPDATE user_enrollments SET validity_date = ?, status = 1 WHERE id = ?");
+                    $up->execute([$valDate, $existingId]);
+                } else {
+                    $ins = $pdo->prepare("INSERT INTO user_enrollments (user_id, course_id, subject_id, validity_date, status) VALUES (?, ?, 0, ?, 1)");
+                    $ins->execute([$userId, $cId, $valDate]);
+                }
+                $count++;
+            }
+            sendResponse(true, "Successfully assigned $count batches to student!");
+            break;
+        }
+
+        // Mode 2: Single Course with Multiple Subjects (or All Subjects)
+        $courseId = (int)($input['course_id'] ?? 0);
+        if ($courseId <= 0) {
+            sendResponse(false, "Batch selection is required", null, 400);
+        }
+
+        $subjectIds = [];
+        if (isset($input['subject_ids']) && is_array($input['subject_ids'])) {
+            $subjectIds = array_map('intval', $input['subject_ids']);
+        } elseif (isset($input['subject_id'])) {
+            $subjectIds = [(int)$input['subject_id']];
+        }
+
+        if (empty($subjectIds)) {
+            $subjectIds = [0];
+        }
+
+        // If '0' is among subject IDs, student gets Full Batch Access (all subjects)
+        if (in_array(0, $subjectIds, true)) {
+            // Delete individual subject rows to prevent duplicate records
+            $pdo->prepare("DELETE FROM user_enrollments WHERE user_id = ? AND course_id = ? AND subject_id != 0")->execute([$userId, $courseId]);
+
+            $chk = $pdo->prepare("SELECT id FROM user_enrollments WHERE user_id = ? AND course_id = ? AND subject_id = 0");
+            $chk->execute([$userId, $courseId]);
+            $existingId = $chk->fetchColumn();
+            if ($existingId) {
+                $up = $pdo->prepare("UPDATE user_enrollments SET validity_date = ?, status = 1 WHERE id = ?");
+                $up->execute([$valDate, $existingId]);
+            } else {
+                $ins = $pdo->prepare("INSERT INTO user_enrollments (user_id, course_id, subject_id, validity_date, status) VALUES (?, ?, 0, ?, 1)");
+                $ins->execute([$userId, $courseId, $valDate]);
+            }
+            sendResponse(true, "Full Batch Access (all subjects) granted successfully!");
+            break;
+        }
+
+        // Otherwise, specific subjects are selected
+        // Delete any full batch row if we are restricting to specific subjects
+        $pdo->prepare("DELETE FROM user_enrollments WHERE user_id = ? AND course_id = ? AND subject_id = 0")->execute([$userId, $courseId]);
+
+        $subCount = 0;
+        foreach ($subjectIds as $sId) {
+            if ($sId <= 0) continue;
+            $chk = $pdo->prepare("SELECT id FROM user_enrollments WHERE user_id = ? AND course_id = ? AND subject_id = ?");
+            $chk->execute([$userId, $courseId, $sId]);
+            $existingId = $chk->fetchColumn();
+            if ($existingId) {
+                $up = $pdo->prepare("UPDATE user_enrollments SET validity_date = ?, status = 1 WHERE id = ?");
+                $up->execute([$valDate, $existingId]);
+            } else {
+                $ins = $pdo->prepare("INSERT INTO user_enrollments (user_id, course_id, subject_id, validity_date, status) VALUES (?, ?, ?, ?, 1)");
+                $ins->execute([$userId, $courseId, $sId, $valDate]);
+            }
+            $subCount++;
+        }
+
+        sendResponse(true, "Successfully assigned $subCount specific subjects to student!");
         break;
 
     case 'list_user_enrollments':
