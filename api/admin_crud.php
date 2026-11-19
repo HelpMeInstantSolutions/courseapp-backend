@@ -921,9 +921,10 @@ switch ($action) {
             $apiUrl .= "&search=" . urlencode($search);
         }
 
-        $res = httpGetDailymotion($apiUrl, ["Authorization: Bearer {$token}"]);
+        $fetchError = null;
+        $res = httpGetDailymotion($apiUrl, ["Authorization: Bearer {$token}"], $fetchError);
         if (!$res) {
-            sendResponse(false, "Failed to connect to Dailymotion API. Please try again.", null, 502);
+            sendResponse(false, "Failed to connect to Dailymotion API: " . ($fetchError ?? 'Unknown network issue'), ['error' => $fetchError], 502);
         }
 
         $dmData = json_decode($res, true);
