@@ -878,6 +878,234 @@ switch ($action) {
         sendResponse(true, "Video deleted successfully!");
         break;
 
+    case 'fetch_dm_account_videos':
+        $accountId = (int)($input['account_id'] ?? ($_GET['account_id'] ?? 0));
+        $page = max(1, (int)($input['page'] ?? ($_GET['page'] ?? 1)));
+        $limit = min(100, max(10, (int)($input['limit'] ?? ($_GET['limit'] ?? 100))));
+        $search = trim($input['search'] ?? ($_GET['search'] ?? ''));
+
+        // Fetch all active accounts for dropdown switcher
+        $allAccounts = $pdo->query("SELECT id, name, channel_name, uid, is_default FROM dm_accounts WHERE status = 1 ORDER BY is_default DESC, id ASC")->fetchAll();
+        if (empty($allAccounts)) {
+            sendResponse(false, "No active Dailymotion accounts connected. Please connect an account first.", null, 400);
+        }
+
+        // Determine which account to query
+        $selectedAccount = null;
+        if ($accountId > 0) {
+            foreach ($allAccounts as $acc) {
+                if ((int)$acc['id'] === $accountId) {
+                    $selectedAccount = $acc;
+                    break;
+                }
+            }
+        }
+        if (!$selectedAccount) {
+            $selectedAccount = $allAccounts[0];
+            $accountId = (int)$selectedAccount['id'];
+        }
+
+        // Get full account row with credentials
+        $accStmt = $pdo->prepare("SELECT * FROM dm_accounts WHERE id = ?");
+        $accStmt->execute([$accountId]);
+        $fullAccount = $accStmt->fetch();
+
+        $token = refreshDmAccount($pdo, $fullAccount);
+        if (!$token) {
+            sendResponse(false, "Could not obtain authorization token for account '{$selectedAccount['name']}'. Please re-authenticate.", null, 401);
+        }
+
+        // Query Dailymotion API for user videos sorted by recent (descending by upload date)
+        $apiUrl = "https://api.dailymotion.com/user/me/videos?fields=id,title,duration,thumbnail_240_url,created_time,private&sort=recent&limit={$limit}&page={$page}";
+        if ($search !== '') {
+            $apiUrl .= "&search=" . urlencode($search);
+        }
+
+        $res = httpGetDailymotion($apiUrl, ["Authorization: Bearer {$token}"]);
+        if (!$res) {
+            sendResponse(false, "Failed to connect to Dailymotion API. Please try again.", null, 502);
+        }
+
+        $dmData = json_decode($res, true);
+        if (isset($dmData['error'])) {
+            sendResponse(false, "Dailymotion error: " . ($dmData['error']['message'] ?? 'Unknown error'), $dmData['error'], 400);
+        }
+
+        $rawList = $dmData['list'] ?? [];
+        $totalVideos = (int)($dmData['total'] ?? count($rawList));
+        $hasMore = !empty($dmData['has_more']);
+
+        // Fetch already imported video IDs in our DB to flag them
+        $existingMap = [];
+        try {
+            $exRows = $pdo->query("SELECT v.dailymotion_id, v.id as local_video_id, v.course_id, v.subject_id, v.chapter_id, c.title as course_title, ch.title as chapter_title FROM videos v LEFT JOIN courses c ON v.course_id = c.id LEFT JOIN chapters ch ON v.chapter_id = ch.id")->fetchAll();
+            foreach ($exRows as $er) {
+                $existingMap[$er['dailymotion_id']] = [
+                    'local_id' => $er['local_video_id'],
+                    'course_id' => $er['course_id'],
+                    'course_title' => $er['course_title'] ?? '',
+                    'chapter_id' => $er['chapter_id'],
+                    'chapter_title' => $er['chapter_title'] ?? ''
+                ];
+            }
+        } catch (Exception $e) {}
+
+        $formattedVideos = [];
+        foreach ($rawList as $v) {
+            $secs = (int)($v['duration'] ?? 0);
+            $hrs = floor($secs / 3600);
+            $mins = floor(($secs % 3600) / 60);
+            $remSecs = $secs % 60;
+            $durationFormatted = ($hrs > 0) ? sprintf("%02d:%02d:%02d", $hrs, $mins, $remSecs) : sprintf("%02d:%02d", $mins, $remSecs);
+
+            $ctime = (int)($v['created_time'] ?? 0);
+            $createdFormatted = ($ctime > 0) ? date('d M Y, h:i A', $ctime) : '';
+
+            $vidId = $v['id'];
+            $isImported = isset($existingMap[$vidId]);
+
+            $formattedVideos[] = [
+                'id' => $vidId,
+                'title' => $v['title'] ?? '',
+                'duration' => $durationFormatted,
+                'duration_seconds' => $secs,
+                'thumbnail_url' => $v['thumbnail_240_url'] ?? '',
+                'created_time' => $ctime,
+                'created_formatted' => $createdFormatted,
+                'private' => !empty($v['private']),
+                'account_id' => $accountId,
+                'account_name' => $selectedAccount['name'],
+                'is_imported' => $isImported,
+                'imported_info' => $isImported ? $existingMap[$vidId] : null
+            ];
+        }
+
+        sendResponse(true, "Fetched " . count($formattedVideos) . " videos", [
+            'accounts' => $allAccounts,
+            'selected_account_id' => $accountId,
+            'selected_account_name' => $selectedAccount['name'],
+            'total' => $totalVideos,
+            'page' => $page,
+            'has_more' => $hasMore,
+            'videos' => $formattedVideos
+        ]);
+        break;
+
+    case 'import_dm_videos':
+        $courseId = (int)($input['course_id'] ?? 0);
+        $subjectId = (int)($input['subject_id'] ?? 0);
+        $chapterId = (int)($input['chapter_id'] ?? 0);
+        $defaultAccountId = (int)($input['account_id'] ?? 0);
+        $isPreview = (int)($input['is_free_preview'] ?? 0);
+        $videosList = $input['videos'] ?? [];
+
+        if ($courseId <= 0 || $chapterId <= 0 || empty($videosList) || !is_array($videosList)) {
+            sendResponse(false, "Batch, Chapter and at least one selected video are required", null, 400);
+        }
+
+        // Auto detect subject if missing
+        if ($subjectId <= 0 && $chapterId > 0) {
+            $chSub = $pdo->prepare("SELECT subject_id FROM chapters WHERE id = ?");
+            $chSub->execute([$chapterId]);
+            $subjectId = (int)$chSub->fetchColumn();
+        }
+        if ($subjectId <= 0) {
+            $subCheck = $pdo->prepare("SELECT id FROM subjects WHERE course_id = ? ORDER BY id ASC LIMIT 1");
+            $subCheck->execute([$courseId]);
+            $subjectId = (int)$subCheck->fetchColumn();
+        }
+
+        // Get starting sort order
+        $sortStmt = $pdo->prepare("SELECT COALESCE(MAX(sort_order), 0) FROM videos WHERE chapter_id = ?");
+        $sortStmt->execute([$chapterId]);
+        $currentSort = (int)$sortStmt->fetchColumn();
+
+        $imported = 0;
+        $skipped = 0;
+
+        $pdo->beginTransaction();
+        $checkStmt = $pdo->prepare("SELECT id FROM videos WHERE chapter_id = ? AND dailymotion_id = ?");
+        $insertStmt = $pdo->prepare("
+            INSERT INTO videos (course_id, subject_id, chapter_id, dm_account_id, title, description, dailymotion_id, duration, is_free_preview, sort_order, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))
+        ");
+
+        foreach ($videosList as $item) {
+            $dmId = trim($item['dailymotion_id'] ?? ($item['id'] ?? ''));
+            if (!$dmId) continue;
+
+            // Check if already in this chapter
+            $checkStmt->execute([$chapterId, $dmId]);
+            if ($checkStmt->fetch()) {
+                $skipped++;
+                continue;
+            }
+
+            $vTitle = trim($item['title'] ?? 'Video Lesson');
+            $vDuration = trim($item['duration'] ?? '15:00');
+            $accId = (int)($item['account_id'] ?? $defaultAccountId);
+
+            $currentSort++;
+            $insertStmt->execute([
+                $courseId,
+                $subjectId,
+                $chapterId,
+                $accId,
+                $vTitle,
+                '',
+                $dmId,
+                $vDuration,
+                $isPreview,
+                $currentSort
+            ]);
+            $imported++;
+        }
+
+        $pdo->commit();
+        sendResponse(true, "Successfully imported {$imported} video lesson(s)!" . ($skipped > 0 ? " ({$skipped} duplicates skipped)" : ""), [
+            'imported_count' => $imported,
+            'skipped_count' => $skipped
+        ]);
+        break;
+
+    case 'reorder_videos':
+        $order = $input['order'] ?? [];
+        if (!empty($order) && is_array($order)) {
+            $pdo->beginTransaction();
+            $up = $pdo->prepare("UPDATE videos SET sort_order = ? WHERE id = ?");
+            foreach ($order as $idx => $item) {
+                $vidId = is_array($item) ? (int)($item['id'] ?? 0) : (int)$item;
+                $sortNum = is_array($item) ? (int)($item['sort_order'] ?? ($idx + 1)) : ($idx + 1);
+                if ($vidId > 0) {
+                    $up->execute([$sortNum, $vidId]);
+                }
+            }
+            $pdo->commit();
+            sendResponse(true, "Video sequence updated successfully!");
+        } else {
+            sendResponse(false, "Invalid video order data", null, 400);
+        }
+        break;
+
+    case 'reorder_chapters':
+        $order = $input['order'] ?? [];
+        if (!empty($order) && is_array($order)) {
+            $pdo->beginTransaction();
+            $up = $pdo->prepare("UPDATE chapters SET sort_order = ? WHERE id = ?");
+            foreach ($order as $idx => $item) {
+                $chId = is_array($item) ? (int)($item['id'] ?? 0) : (int)$item;
+                $sortNum = is_array($item) ? (int)($item['sort_order'] ?? ($idx + 1)) : ($idx + 1);
+                if ($chId > 0) {
+                    $up->execute([$sortNum, $chId]);
+                }
+            }
+            $pdo->commit();
+            sendResponse(true, "Chapter sequence updated successfully!");
+        } else {
+            sendResponse(false, "Invalid chapter order data", null, 400);
+        }
+        break;
+
     default:
         sendResponse(false, "Invalid admin action", null, 400);
         break;

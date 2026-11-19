@@ -1,10 +1,15 @@
 {
-    "access_token": "dWRrcypdfX59IEJDFV5CPBc6GAFiRhgoNThoDAtyLWkz",
-    "token_type": "Bearer",
-    "expires_in": 36000,
-    "refresh_token": "66e1c1b82878cc7db7c3b3689800eb7b96091b8a",
-    "scope": " delegate_account_management delete email feed ifttt manage_analytics manage_app_connections manage_applications manage_claim_rules manage_collections manage_comments manage_domains manage_favorites manage_features manage_friends manage_groups manage_history manage_likes manage_player manage_players manage_playlists manage_records manage_subscriptions manage_subtitles manage_tiles manage_user_settings manage_videos read read_insights userinfo write",
+    "id": 1,
+    "name": "Primary Account (Maths)",
+    "channel_name": "SSC ROCKSTAR",
     "uid": "x2q3pq9",
-    "email_verified": true,
-    "expires_at": 1794412807
+    "email": "jaatmoviescollection@gmail.com",
+    "client_id": "2f565bdf5ec09e7464db",
+    "client_secret": "6494629f246182ce9acd3c066a7ab5fae5598a06",
+    "refresh_token": "66e1c1b82878cc7db7c3b3689800eb7b96091b8a",
+    "access_token": "eW1jADJcbUt_FXgxPQtkHhYcXxMVYgIXCBM9GXRgelEf",
+    "expires_at": 1795092691,
+    "is_default": 1,
+    "status": 1,
+    "created_at": "2026-11-11 06:23:53"
 }

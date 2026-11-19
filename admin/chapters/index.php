@@ -92,6 +92,12 @@ try {
                         <?php endif; ?>
                     <?php endforeach; ?>
                 </select>
+
+                <!-- Drag to reorder hint badge -->
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[11px] font-semibold rounded-xl border border-indigo-100">
+                    <i data-lucide="move" class="w-3.5 h-3.5 text-indigo-500"></i>
+                    <span>Drag rows to change sort order</span>
+                </span>
             </div>
 
             <!-- Add Chapter Button -->
@@ -108,16 +114,16 @@ try {
                 <table class="w-full text-left text-xs" id="chaptersTable">
                     <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                         <tr>
-                            <th class="py-3.5 px-4 w-12 text-center">#</th>
+                            <th class="py-3.5 px-4 w-20 text-center">Sort</th>
                             <th class="py-3.5 px-4">Chapter Details</th>
                             <th class="py-3.5 px-4">Batch / Subject</th>
                             <th class="py-3.5 px-4 text-center">Notes / PDF</th>
                             <th class="py-3.5 px-4 text-center">Videos</th>
-                            <th class="py-3.5 px-4 text-center">Sort</th>
+                            <th class="py-3.5 px-4 text-center">Sequence #</th>
                             <th class="py-3.5 px-4 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 font-medium">
+                    <tbody class="divide-y divide-slate-100 font-medium" id="chaptersTableBody">
                         <?php if (empty($chapters)): ?>
                             <tr>
                                 <td colspan="7" class="py-12 text-center text-slate-400">
@@ -132,9 +138,17 @@ try {
                             <?php foreach ($chapters as $idx => $ch): ?>
                                 <?php $isSubChapter = !empty($ch['parent_id']) && $ch['parent_id'] > 0; ?>
                                 <tr class="hover:bg-slate-50/80 transition chapter-row <?= $isSubChapter ? 'bg-slate-50/40' : '' ?>" 
+                                    data-id="<?= $ch['id'] ?>"
                                     data-search="<?= strtolower(htmlspecialchars($ch['title'] . ' ' . ($ch['description'] ?? '') . ' ' . ($ch['course_title'] ?? '') . ' ' . ($ch['subject_title'] ?? ''))) ?>">
-                                    <td class="py-3.5 px-4 text-center font-bold text-slate-400">
-                                        <?= $idx + 1 ?>
+                                    <td class="py-3.5 px-4 text-center">
+                                        <div class="flex items-center justify-center gap-1.5">
+                                            <div class="chapter-drag-handle cursor-grab active:cursor-grabbing text-slate-300 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition" title="Drag row up or down to reorder chapter">
+                                                <i data-lucide="grip-vertical" class="w-4 h-4"></i>
+                                            </div>
+                                            <span class="chapter-sort-badge font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
+                                                #<?= (int)$ch['sort_order'] ?>
+                                            </span>
+                                        </div>
                                     </td>
                                     <td class="py-3.5 px-4">
                                         <div class="flex items-center gap-3 <?= $isSubChapter ? 'pl-6' : '' ?>">
@@ -195,7 +209,7 @@ try {
                                             <span><?= (int)$ch['video_count'] ?></span>
                                         </a>
                                     </td>
-                                    <td class="py-3.5 px-4 text-center text-slate-500 font-bold">
+                                    <td class="py-3.5 px-4 text-center text-slate-500 font-bold chapter-sort-col">
                                         #<?= (int)$ch['sort_order'] ?>
                                     </td>
                                     <td class="py-3.5 px-4 text-right">
@@ -518,6 +532,77 @@ async function confirmDeleteChapter(id, title) {
         alert('Server communication error: ' + err.message);
     }
 }
+
+// Toast notification helper for instant drag & drop feedback
+function showSortToast(msg, type = 'info') {
+    let toast = document.getElementById('sortOrderToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'sortOrderToast';
+        toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold transition-all duration-300';
+        document.body.appendChild(toast);
+    }
+    if (type === 'success') {
+        toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold bg-emerald-600 text-white transition-all duration-300 translate-y-0 opacity-100';
+    } else if (type === 'error') {
+        toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold bg-rose-600 text-white transition-all duration-300 translate-y-0 opacity-100';
+    } else {
+        toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold bg-slate-900 text-white transition-all duration-300 translate-y-0 opacity-100';
+    }
+    toast.innerHTML = msg;
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4');
+    }, 2800);
+}
+
+// Initialize SortableJS drag & drop for chapters
+document.addEventListener('DOMContentLoaded', function() {
+    const tbody = document.getElementById('chaptersTableBody');
+    if (tbody && typeof Sortable !== 'undefined') {
+        new Sortable(tbody, {
+            handle: '.chapter-drag-handle',
+            animation: 180,
+            ghostClass: 'bg-indigo-50/90',
+            chosenClass: 'bg-indigo-100/60',
+            onEnd: async function() {
+                const rows = Array.from(tbody.querySelectorAll('tr.chapter-row'));
+                const order = [];
+                rows.forEach((row, idx) => {
+                    const newSort = idx + 1;
+                    const chId = parseInt(row.getAttribute('data-id')) || 0;
+                    const badge = row.querySelector('.chapter-sort-badge');
+                    const colSort = row.querySelector('.chapter-sort-col');
+                    if (badge) badge.textContent = '#' + newSort;
+                    if (colSort) colSort.textContent = '#' + newSort;
+                    if (chId > 0) {
+                        order.push({ id: chId, sort_order: newSort });
+                    }
+                });
+
+                showSortToast('⏳ Saving new sequence...', 'info');
+                try {
+                    const res = await fetch('/api/admin_crud.php?action=reorder_chapters', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ order: order })
+                    });
+                    const json = await res.json();
+                    if (json.status) {
+                        showSortToast('✅ Chapter sequence saved!', 'success');
+                    } else {
+                        showSortToast('❌ ' + (json.message || 'Error updating order'), 'error');
+                    }
+                } catch (e) {
+                    showSortToast('❌ Network error: ' + e.message, 'error');
+                }
+            }
+        });
+    }
+});
 </script>
+
+<!-- SortableJS library for smooth drag-and-drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

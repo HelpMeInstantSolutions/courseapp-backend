@@ -127,12 +127,26 @@ try {
                 <?php endif; ?>
             </div>
 
-            <!-- Add Video Button -->
-            <button onclick="openVideoModal()" 
-                    class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition">
-                <i data-lucide="video" class="w-4 h-4"></i>
-                <span>Add Video Lesson</span>
-            </button>
+            <!-- Action Buttons: DM Import & Add Lesson -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <!-- Drag to reorder hint badge -->
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 text-[11px] font-semibold rounded-xl border border-indigo-100">
+                    <i data-lucide="move" class="w-3.5 h-3.5 text-indigo-500"></i>
+                    <span>Drag rows to change sort order</span>
+                </span>
+
+                <button onclick="openDmVideoPickerModal()" 
+                        class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition">
+                    <i data-lucide="cloud-download" class="w-4 h-4"></i>
+                    <span>Fetch from DM Account</span>
+                </button>
+
+                <button onclick="openVideoModal()" 
+                        class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition">
+                    <i data-lucide="video" class="w-4 h-4"></i>
+                    <span>Add Video Lesson</span>
+                </button>
+            </div>
         </div>
 
         <!-- Videos Data Table -->
@@ -141,7 +155,7 @@ try {
                 <table class="w-full text-left text-xs" id="videosTable">
                     <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                         <tr>
-                            <th class="py-3.5 px-4 w-12 text-center">#</th>
+                            <th class="py-3.5 px-4 w-20 text-center">Sort</th>
                             <th class="py-3.5 px-4">Lesson Details</th>
                             <th class="py-3.5 px-4">Batch & Subject</th>
                             <th class="py-3.5 px-4">Chapter</th>
@@ -152,7 +166,7 @@ try {
                             <th class="py-3.5 px-4 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100 font-medium">
+                    <tbody class="divide-y divide-slate-100 font-medium" id="videosTableBody">
                         <?php if (empty($videos)): ?>
                             <tr>
                                 <td colspan="9" class="py-12 text-center text-slate-400">
@@ -166,10 +180,18 @@ try {
                         <?php else: ?>
                             <?php foreach ($videos as $v): ?>
                                 <tr class="hover:bg-slate-50/70 transition video-row" 
+                                    data-id="<?= $v['id'] ?>"
                                     data-title="<?= strtolower(htmlspecialchars($v['title'])) ?>"
                                     data-dmid="<?= strtolower(htmlspecialchars($v['dailymotion_id'])) ?>">
-                                    <td class="py-3.5 px-4 text-center font-bold text-slate-400">
-                                        #<?= htmlspecialchars($v['sort_order']) ?>
+                                    <td class="py-3.5 px-4 text-center">
+                                        <div class="flex items-center justify-center gap-1.5">
+                                            <div class="video-drag-handle cursor-grab active:cursor-grabbing text-slate-300 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition" title="Drag row up or down to reorder video">
+                                                <i data-lucide="grip-vertical" class="w-4 h-4"></i>
+                                            </div>
+                                            <span class="video-sort-badge font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[11px]">
+                                                #<?= htmlspecialchars($v['sort_order']) ?>
+                                            </span>
+                                        </div>
                                     </td>
                                     <td class="py-3.5 px-4">
                                         <div class="flex items-center gap-3">
@@ -363,9 +385,14 @@ try {
                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-500 focus:bg-white transition">
                     </div>
                     <button type="button" id="btnAutoFetch" onclick="fetchDailymotionDetails()" 
-                            class="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0">
+                            class="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0" title="Auto-detect title and duration">
                         <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
                         <span>Auto Fetch</span>
+                    </button>
+                    <button type="button" onclick="openDmVideoPickerModal(true)" 
+                            class="px-3 py-2.5 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0" title="Browse and pick uploaded video directly from DM account">
+                        <i data-lucide="cloud-download" class="w-3.5 h-3.5"></i>
+                        <span>Pick Video</span>
                     </button>
                 </div>
                 <p id="dmFetchStatus" class="text-[11px] mt-1.5 hidden"></p>
@@ -451,6 +478,161 @@ try {
         </div>
         <div class="aspect-video bg-black" id="previewContainer">
             <!-- Iframe injected via JS -->
+        </div>
+    </div>
+</div>
+
+<!-- DAILYMOTION VIDEO BROWSER & BULK IMPORT MODAL -->
+<div id="dmVideoPickerModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 md:p-6">
+    <div class="bg-white rounded-3xl max-w-4xl w-full border border-slate-200 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                    <i data-lucide="cloud-download" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                        <span>Fetch & Import from Dailymotion</span>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">Direct Account Sync</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Browse uploaded lessons sorted descending by date. Select videos with checkboxes to import them directly into your batch.</p>
+                </div>
+            </div>
+            <button onclick="closeDmVideoPickerModal()" class="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <!-- Target Destination Bar (Batch -> Subject -> Chapter) -->
+        <div class="px-6 py-3.5 bg-gradient-to-r from-indigo-50/90 via-sky-50/70 to-indigo-50/90 border-b border-indigo-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-2 flex-wrap flex-1">
+                <span class="font-bold text-slate-700 uppercase tracking-wider text-[11px] flex items-center gap-1 shrink-0">
+                    <i data-lucide="folder-output" class="w-3.5 h-3.5 text-indigo-600"></i> Import Into:
+                </span>
+                
+                <!-- Target Batch Dropdown -->
+                <select id="pickerCourseId" onchange="onPickerCourseChanged()" 
+                        class="px-3 py-1.5 bg-white border border-indigo-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm max-w-[200px]">
+                    <option value="">-- Select Target Batch * --</option>
+                    <?php foreach ($courses as $c): ?>
+                        <option value="<?= $c['id'] ?>" <?= $selectedCourseId == $c['id'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($c['title']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+
+                <!-- Target Subject Dropdown -->
+                <select id="pickerSubjectId" onchange="onPickerSubjectChanged()" 
+                        class="px-3 py-1.5 bg-white border border-indigo-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm max-w-[180px]">
+                    <option value="">-- Select Subject * --</option>
+                </select>
+
+                <!-- Target Chapter Dropdown -->
+                <select id="pickerChapterId" 
+                        class="px-3 py-1.5 bg-white border border-indigo-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 shadow-sm max-w-[220px]">
+                    <option value="">-- Select Chapter * --</option>
+                </select>
+
+                <!-- Free Demo Checkbox -->
+                <label class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 cursor-pointer ml-1">
+                    <input type="checkbox" id="pickerIsPreview" class="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-0">
+                    <span>Free Demo</span>
+                </label>
+            </div>
+
+            <!-- Import Action Button -->
+            <button id="btnBulkImport" onclick="executeBulkImport()" disabled
+                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-2 shrink-0">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i>
+                <span id="bulkImportBtnText">Import Selected (0)</span>
+            </button>
+        </div>
+
+        <!-- Filter & Search Sub-bar -->
+        <div class="px-6 py-2.5 bg-white border-b border-slate-200/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-2.5 flex-wrap flex-1">
+                <!-- Account Selector -->
+                <div class="flex items-center gap-1.5">
+                    <span class="text-slate-400 font-semibold text-[11px]">Account:</span>
+                    <select id="pickerAccountId" onchange="fetchPickerVideos(1)" 
+                            class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-indigo-700 focus:outline-none focus:border-indigo-500 transition">
+                        <?php foreach ($dmAccounts as $acc): ?>
+                            <option value="<?= $acc['id'] ?>">
+                                <?= htmlspecialchars($acc['name']) ?> (<?= htmlspecialchars($acc['channel_name'] ?: $acc['uid']) ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Search Input -->
+                <div class="relative flex-1 min-w-[200px] max-w-sm">
+                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="pickerSearch" oninput="debouncePickerSearch()" 
+                           placeholder="Search account video by title..." 
+                           class="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:bg-white transition">
+                </div>
+
+                <!-- Filter Mode Dropdown -->
+                <select id="pickerFilterMode" onchange="applyPickerLocalFilters()" 
+                        class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-indigo-500 transition">
+                    <option value="all">All Videos</option>
+                    <option value="unimported" selected>Not Yet Added</option>
+                    <option value="imported">Already Added</option>
+                </select>
+
+                <!-- Refresh Button -->
+                <button onclick="fetchPickerVideos(1)" title="Refresh videos from DM" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Select All Checkbox & Counter -->
+            <div class="flex items-center gap-3 shrink-0">
+                <label class="inline-flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    <input type="checkbox" id="pickerSelectAll" onchange="togglePickerSelectAll(this)" class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-0">
+                    <span>Select All (<span id="pickerVisibleCount">0</span>)</span>
+                </label>
+                <span id="pickerSelectedBadge" class="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200/60 rounded-xl text-[11px] font-bold">
+                    0 selected
+                </span>
+            </div>
+        </div>
+
+        <!-- Video Cards List Container -->
+        <div class="flex-1 overflow-y-auto p-6 bg-slate-50/50" id="pickerVideosContainer">
+            <div id="pickerLoading" class="py-16 text-center text-slate-400">
+                <div class="inline-block animate-spin text-indigo-600 mb-2">
+                    <i data-lucide="loader-2" class="w-8 h-8"></i>
+                </div>
+                <p class="text-xs font-semibold text-slate-600">Fetching uploaded videos from Dailymotion account...</p>
+            </div>
+            
+            <div id="pickerVideosList" class="space-y-2.5 hidden">
+                <!-- Video rows will be injected here via JavaScript -->
+            </div>
+
+            <div id="pickerEmpty" class="py-16 text-center text-slate-400 hidden">
+                <i data-lucide="film" class="w-10 h-10 mx-auto text-slate-300 mb-2"></i>
+                <p class="font-bold text-slate-700 text-sm">No videos found</p>
+                <p class="text-xs text-slate-400 mt-0.5">No uploaded videos match the current search or filter.</p>
+            </div>
+        </div>
+
+        <!-- Modal Footer with Pagination / Status -->
+        <div class="px-6 py-3 border-t border-slate-100 bg-white flex items-center justify-between text-xs text-slate-500">
+            <div id="pickerTotalStatus" class="font-medium">
+                Showing videos descending by upload date
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="pickerLoadMoreBtn" onclick="fetchNextPickerPage()" class="hidden px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition">
+                    Load Next 50 Videos
+                </button>
+                <button onclick="closeDmVideoPickerModal()" class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition">
+                    Cancel / Close
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -743,6 +925,424 @@ if (window.location.search.includes('new=1')) {
         populateModalChapters(urlCourseId, urlSubId || 0, urlChId || 0);
     }
 }
+
+// -------------------------------------------------------------
+// TOAST NOTIFICATIONS HELPER
+// -------------------------------------------------------------
+function showSortToast(msg, type = 'info') {
+    let toast = document.getElementById('sortOrderToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'sortOrderToast';
+        toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold transition-all duration-300';
+        document.body.appendChild(toast);
+    }
+    if (type === 'success') {
+        toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold bg-emerald-600 text-white transition-all duration-300 translate-y-0 opacity-100';
+    } else if (type === 'error') {
+        toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold bg-rose-600 text-white transition-all duration-300 translate-y-0 opacity-100';
+    } else {
+        toast.className = 'fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold bg-slate-900 text-white transition-all duration-300 translate-y-0 opacity-100';
+    }
+    toast.innerHTML = msg;
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4');
+    }, 2800);
+}
+
+// -------------------------------------------------------------
+// SORTABLE JS DRAG & DROP REORDERING FOR VIDEOS
+// -------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', function() {
+    const tbody = document.getElementById('videosTableBody');
+    if (tbody && typeof Sortable !== 'undefined') {
+        new Sortable(tbody, {
+            handle: '.video-drag-handle',
+            animation: 180,
+            ghostClass: 'bg-indigo-50/90',
+            chosenClass: 'bg-indigo-100/60',
+            onEnd: async function() {
+                const rows = Array.from(tbody.querySelectorAll('tr.video-row'));
+                const order = [];
+                rows.forEach((row, idx) => {
+                    const newSort = idx + 1;
+                    const vId = parseInt(row.getAttribute('data-id')) || 0;
+                    const badge = row.querySelector('.video-sort-badge');
+                    if (badge) badge.textContent = '#' + newSort;
+                    if (vId > 0) {
+                        order.push({ id: vId, sort_order: newSort });
+                    }
+                });
+
+                showSortToast('⏳ Saving video sequence...', 'info');
+                try {
+                    const res = await fetch('/api/admin_crud.php?action=reorder_videos', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ order: order })
+                    });
+                    const json = await res.json();
+                    if (json.status) {
+                        showSortToast('✅ Video sequence saved!', 'success');
+                    } else {
+                        showSortToast('❌ ' + (json.message || 'Error updating order'), 'error');
+                    }
+                } catch (e) {
+                    showSortToast('❌ Network error: ' + e.message, 'error');
+                }
+            }
+        });
+    }
+});
+
+// -------------------------------------------------------------
+// DAILYMOTION VIDEO BROWSER & BULK IMPORT LOGIC
+// -------------------------------------------------------------
+let pickerVideosData = [];
+let pickerCurrentPage = 1;
+let pickerSearchTimer = null;
+window._pickerSingleFillMode = false;
+
+function openDmVideoPickerModal(forSingleFill = false) {
+    window._pickerSingleFillMode = forSingleFill;
+    const modal = document.getElementById('dmVideoPickerModal');
+    modal.classList.remove('hidden');
+
+    // Auto-select current filtered batch, subject & chapter if available
+    const curCourse = document.getElementById('courseFilter') ? parseInt(document.getElementById('courseFilter').value) : 0;
+    const curSub = document.getElementById('subjectFilter') ? parseInt(document.getElementById('subjectFilter').value) : 0;
+    const curCh = document.getElementById('chapterFilter') ? parseInt(document.getElementById('chapterFilter').value) : 0;
+
+    const pickerCourse = document.getElementById('pickerCourseId');
+    if (curCourse > 0) {
+        pickerCourse.value = curCourse;
+    }
+    populatePickerSubjects(pickerCourse.value, curSub);
+    populatePickerChapters(pickerCourse.value, curSub, curCh);
+
+    // Fetch videos from selected DM account
+    fetchPickerVideos(1);
+}
+
+function closeDmVideoPickerModal() {
+    document.getElementById('dmVideoPickerModal').classList.add('hidden');
+    window._pickerSingleFillMode = false;
+}
+
+function onPickerCourseChanged() {
+    const cId = document.getElementById('pickerCourseId').value;
+    populatePickerSubjects(cId, 0);
+    populatePickerChapters(cId, 0, 0);
+}
+
+function onPickerSubjectChanged() {
+    const cId = document.getElementById('pickerCourseId').value;
+    const sId = document.getElementById('pickerSubjectId').value;
+    populatePickerChapters(cId, sId, 0);
+}
+
+function populatePickerSubjects(courseId, selectedSubId = 0) {
+    const sel = document.getElementById('pickerSubjectId');
+    sel.innerHTML = '<option value="">-- Select Subject * --</option>';
+    const filtered = allSubjectsData.filter(s => courseId == 0 || s.course_id == courseId);
+    filtered.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.title;
+        if (s.id == selectedSubId) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function populatePickerChapters(courseId, subjectId = 0, selectedChId = 0) {
+    const sel = document.getElementById('pickerChapterId');
+    sel.innerHTML = '<option value="">-- Select Chapter * --</option>';
+    const filtered = allChaptersData.filter(ch => {
+        if (courseId > 0 && ch.course_id != courseId) return false;
+        if (subjectId > 0 && ch.subject_id > 0 && ch.subject_id != subjectId) return false;
+        return true;
+    });
+    filtered.forEach(ch => {
+        const opt = document.createElement('option');
+        opt.value = ch.id;
+        const prefix = (ch.parent_id > 0) ? '  ↳ 📁 ' : '📁 ';
+        opt.textContent = prefix + ch.title;
+        if (ch.id == selectedChId) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function debouncePickerSearch() {
+    clearTimeout(pickerSearchTimer);
+    pickerSearchTimer = setTimeout(() => {
+        fetchPickerVideos(1);
+    }, 350);
+}
+
+async function fetchPickerVideos(page = 1) {
+    pickerCurrentPage = page;
+    const accountId = document.getElementById('pickerAccountId').value;
+    const search = document.getElementById('pickerSearch').value.trim();
+
+    const loadingEl = document.getElementById('pickerLoading');
+    const listEl = document.getElementById('pickerVideosList');
+    const emptyEl = document.getElementById('pickerEmpty');
+    const loadMoreBtn = document.getElementById('pickerLoadMoreBtn');
+
+    if (page === 1) {
+        loadingEl.classList.remove('hidden');
+        listEl.classList.add('hidden');
+        emptyEl.classList.add('hidden');
+    }
+
+    try {
+        const url = '/api/admin_crud.php?action=fetch_dm_account_videos&account_id=' + accountId + 
+                    '&page=' + page + '&limit=50&search=' + encodeURIComponent(search);
+        const res = await fetch(url);
+        const json = await res.json();
+
+        loadingEl.classList.add('hidden');
+
+        if (!json.status) {
+            emptyEl.classList.remove('hidden');
+            emptyEl.querySelector('p').textContent = json.message || 'Error fetching videos';
+            return;
+        }
+
+        const data = json.data;
+        if (page === 1) {
+            pickerVideosData = data.videos || [];
+        } else {
+            pickerVideosData = pickerVideosData.concat(data.videos || []);
+        }
+
+        document.getElementById('pickerTotalStatus').textContent = 
+            'Total ' + data.total + ' videos on account (sorted newest first)';
+
+        if (data.has_more) {
+            loadMoreBtn.classList.remove('hidden');
+        } else {
+            loadMoreBtn.classList.add('hidden');
+        }
+
+        renderPickerVideos();
+
+    } catch (err) {
+        loadingEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        emptyEl.querySelector('p').textContent = 'Network error: ' + err.message;
+    }
+}
+
+function fetchNextPickerPage() {
+    fetchPickerVideos(pickerCurrentPage + 1);
+}
+
+function applyPickerLocalFilters() {
+    renderPickerVideos();
+}
+
+function renderPickerVideos() {
+    const listEl = document.getElementById('pickerVideosList');
+    const emptyEl = document.getElementById('pickerEmpty');
+    const filterMode = document.getElementById('pickerFilterMode').value;
+    const query = document.getElementById('pickerSearch').value.trim().toLowerCase();
+
+    listEl.innerHTML = '';
+
+    const filtered = pickerVideosData.filter(v => {
+        if (filterMode === 'unimported' && v.is_imported) return false;
+        if (filterMode === 'imported' && !v.is_imported) return false;
+        if (query && !v.title.toLowerCase().includes(query) && !v.id.toLowerCase().includes(query)) return false;
+        return true;
+    });
+
+    document.getElementById('pickerVisibleCount').textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        listEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        updatePickerSelectionBadge();
+        return;
+    }
+
+    emptyEl.classList.add('hidden');
+    listEl.classList.remove('hidden');
+
+    filtered.forEach((v, idx) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'picker-video-item flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-white rounded-2xl border transition duration-150 ' + 
+                            (v.is_imported ? 'border-slate-200/70 bg-slate-50/40' : 'border-slate-200/90 hover:border-indigo-300 hover:shadow-sm');
+        itemDiv.setAttribute('data-dmid', v.id);
+
+        const thumbUrl = v.thumbnail_url || 'https://www.dailymotion.com/thumbnail/video/' + v.id;
+
+        itemDiv.innerHTML = `
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <!-- Checkbox -->
+                <input type="checkbox" class="picker-item-cb w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-0 shrink-0 cursor-pointer"
+                       value="${v.id}"
+                       data-index="${idx}"
+                       onchange="onPickerItemCheckChanged()">
+
+                <!-- Thumbnail with duration pill -->
+                <div class="relative w-24 h-14 rounded-xl overflow-hidden bg-slate-900 shrink-0 shadow-sm">
+                    <img src="${thumbUrl}" alt="" class="w-full h-full object-cover">
+                    <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-white font-mono text-[9px] font-semibold">
+                        ${v.duration}
+                    </span>
+                </div>
+
+                <!-- Details -->
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-bold text-xs text-slate-900 truncate" title="${v.title}">
+                            ${v.title}
+                        </span>
+                        ${v.private ? '<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold text-[9px] border border-slate-200">🔒 Private</span>' : ''}
+                    </div>
+
+                    <div class="flex items-center gap-2 mt-1 text-[11px] text-slate-500 flex-wrap">
+                        <span class="font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded font-semibold text-[10px]">
+                            ${v.id}
+                        </span>
+                        <span>•</span>
+                        <span class="text-slate-400 text-[10px]">
+                            📅 ${v.created_formatted || 'Recently uploaded'}
+                        </span>
+                        ${v.is_imported ? `
+                            <span>•</span>
+                            <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                <i data-lucide="check" class="w-3 h-3"></i> Already in: ${v.imported_info.course_title || 'Course'} / ${v.imported_info.chapter_title || 'Chapter'}
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Single Select / Fill Button -->
+            <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <button type="button" onclick="usePickerVideoInSingleForm(${JSON.stringify(v).replace(/"/g, '&quot;')})" 
+                        class="px-3 py-1.5 text-[11px] font-bold rounded-xl text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition flex items-center gap-1">
+                    <i data-lucide="arrow-right-circle" class="w-3.5 h-3.5"></i>
+                    <span>Fill in Form</span>
+                </button>
+            </div>
+        `;
+
+        listEl.appendChild(itemDiv);
+    });
+
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+
+    updatePickerSelectionBadge();
+}
+
+function togglePickerSelectAll(masterCb) {
+    const cbs = document.querySelectorAll('.picker-item-cb');
+    cbs.forEach(cb => cb.checked = masterCb.checked);
+    updatePickerSelectionBadge();
+}
+
+function onPickerItemCheckChanged() {
+    updatePickerSelectionBadge();
+}
+
+function updatePickerSelectionBadge() {
+    const checked = document.querySelectorAll('.picker-item-cb:checked');
+    const count = checked.length;
+    document.getElementById('pickerSelectedBadge').textContent = count + ' selected';
+    document.getElementById('bulkImportBtnText').textContent = 'Import Selected (' + count + ')';
+    
+    const importBtn = document.getElementById('btnBulkImport');
+    importBtn.disabled = (count === 0);
+}
+
+function usePickerVideoInSingleForm(video) {
+    // Populate the single Add Video form fields
+    document.getElementById('video_dm_id').value = video.id;
+    document.getElementById('video_title').value = video.title;
+    document.getElementById('video_duration').value = video.duration;
+    if (video.account_id) {
+        document.getElementById('video_dm_account_id').value = video.account_id;
+    }
+
+    closeDmVideoPickerModal();
+
+    // If add modal not open, open it
+    openVideoModal();
+    const statusEl = document.getElementById('dmFetchStatus');
+    statusEl.className = 'text-[11px] mt-1.5 text-emerald-600 font-semibold block';
+    statusEl.textContent = '✅ Selected from DM: "' + video.title + '" (' + video.duration + ')';
+}
+
+async function executeBulkImport() {
+    const courseId = parseInt(document.getElementById('pickerCourseId').value) || 0;
+    const subjectId = parseInt(document.getElementById('pickerSubjectId').value) || 0;
+    const chapterId = parseInt(document.getElementById('pickerChapterId').value) || 0;
+    const isPreview = document.getElementById('pickerIsPreview').checked ? 1 : 0;
+    const accountId = parseInt(document.getElementById('pickerAccountId').value) || 0;
+
+    if (courseId <= 0) {
+        alert('Please select a Target Batch for importing.');
+        document.getElementById('pickerCourseId').focus();
+        return;
+    }
+    if (chapterId <= 0) {
+        alert('Please select a Target Chapter where the selected videos should be placed.');
+        document.getElementById('pickerChapterId').focus();
+        return;
+    }
+
+    const checkedBoxes = Array.from(document.querySelectorAll('.picker-item-cb:checked'));
+    if (checkedBoxes.length === 0) {
+        alert('Please select at least one video to import.');
+        return;
+    }
+
+    const selectedIds = new Set(checkedBoxes.map(cb => cb.value));
+    const selectedVideos = pickerVideosData.filter(v => selectedIds.has(v.id));
+
+    const btn = document.getElementById('btnBulkImport');
+    btn.disabled = true;
+    document.getElementById('bulkImportBtnText').textContent = 'Importing ' + selectedVideos.length + ' videos...';
+
+    try {
+        const res = await fetch('/api/admin_crud.php?action=import_dm_videos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                course_id: courseId,
+                subject_id: subjectId,
+                chapter_id: chapterId,
+                account_id: accountId,
+                is_free_preview: isPreview,
+                videos: selectedVideos
+            })
+        });
+
+        const json = await res.json();
+        if (json.status) {
+            alert(json.message);
+            // Redirect to the newly populated chapter so admin can view and reorder immediately!
+            window.location.href = '/admin/videos/?course_id=' + courseId + '&subject_id=' + subjectId + '&chapter_id=' + chapterId;
+        } else {
+            alert(json.message || 'Error during import');
+            btn.disabled = false;
+            document.getElementById('bulkImportBtnText').textContent = 'Import Selected (' + selectedVideos.length + ')';
+        }
+    } catch (e) {
+        alert('Network error while importing videos: ' + e.message);
+        btn.disabled = false;
+        document.getElementById('bulkImportBtnText').textContent = 'Import Selected (' + selectedVideos.length + ')';
+    }
+}
 </script>
+
+<!-- SortableJS library for smooth drag-and-drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
