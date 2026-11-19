@@ -921,10 +921,35 @@ switch ($action) {
             $apiUrl .= "&search=" . urlencode($search);
         }
 
+        // Fetch already imported video IDs in our DB to flag them
+        $existingMap = [];
+        try {
+            $exRows = $pdo->query("SELECT v.dailymotion_id, v.id as local_video_id, v.course_id, v.subject_id, v.chapter_id, c.title as course_title, ch.title as chapter_title FROM videos v LEFT JOIN courses c ON v.course_id = c.id LEFT JOIN chapters ch ON v.chapter_id = ch.id")->fetchAll();
+            foreach ($exRows as $er) {
+                $existingMap[$er['dailymotion_id']] = [
+                    'local_id' => $er['local_video_id'],
+                    'course_id' => $er['course_id'],
+                    'course_title' => $er['course_title'] ?? '',
+                    'chapter_id' => $er['chapter_id'],
+                    'chapter_title' => $er['chapter_title'] ?? ''
+                ];
+            }
+        } catch (Exception $e) {}
+
         $fetchError = null;
         $res = httpGetDailymotion($apiUrl, ["Authorization: Bearer {$token}"], $fetchError);
+        
+        // If server-side fetch is blocked by Hostinger network/firewall, gracefully fallback to direct browser client fetch
         if (!$res) {
-            sendResponse(false, "Failed to connect to Dailymotion API: " . ($fetchError ?? 'Unknown network issue'), ['error' => $fetchError], 502);
+            sendResponse(true, "Direct browser sync initiated", [
+                'direct_browser' => true,
+                'token' => $token,
+                'api_url' => $apiUrl,
+                'account_id' => $accountId,
+                'account_name' => $selectedAccount['name'],
+                'accounts' => $allAccounts,
+                'existing_map' => $existingMap
+            ]);
         }
 
         $dmData = json_decode($res, true);
@@ -944,21 +969,6 @@ switch ($action) {
         $rawList = $dmData['list'] ?? [];
         $totalVideos = (int)($dmData['total'] ?? count($rawList));
         $hasMore = !empty($dmData['has_more']);
-
-        // Fetch already imported video IDs in our DB to flag them
-        $existingMap = [];
-        try {
-            $exRows = $pdo->query("SELECT v.dailymotion_id, v.id as local_video_id, v.course_id, v.subject_id, v.chapter_id, c.title as course_title, ch.title as chapter_title FROM videos v LEFT JOIN courses c ON v.course_id = c.id LEFT JOIN chapters ch ON v.chapter_id = ch.id")->fetchAll();
-            foreach ($exRows as $er) {
-                $existingMap[$er['dailymotion_id']] = [
-                    'local_id' => $er['local_video_id'],
-                    'course_id' => $er['course_id'],
-                    'course_title' => $er['course_title'] ?? '',
-                    'chapter_id' => $er['chapter_id'],
-                    'chapter_title' => $er['chapter_title'] ?? ''
-                ];
-            }
-        } catch (Exception $e) {}
 
         $formattedVideos = [];
         foreach ($rawList as $v) {

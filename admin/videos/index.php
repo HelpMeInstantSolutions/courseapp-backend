@@ -1111,6 +1111,75 @@ async function fetchPickerVideos(page = 1) {
         }
 
         const data = json.data;
+
+        // If backend initiated direct client browser sync (bypasses server network limitations)
+        if (data.direct_browser && data.token) {
+            try {
+                const dmRes = await fetch(data.api_url, {
+                    headers: { 'Authorization': 'Bearer ' + data.token }
+                });
+                const dmJson = await dmRes.json();
+                if (dmJson.error) {
+                    emptyEl.classList.remove('hidden');
+                    emptyEl.querySelector('p').textContent = 'Dailymotion error: ' + (dmJson.error.message || 'Error');
+                    return;
+                }
+
+                const rawList = dmJson.list || [];
+                const exMap = data.existing_map || {};
+                const formatted = rawList.map(v => {
+                    const secs = parseInt(v.duration) || 0;
+                    const hrs = Math.floor(secs / 3600);
+                    const mins = Math.floor((secs % 3600) / 60);
+                    const rem = secs % 60;
+                    const durStr = (hrs > 0) 
+                        ? String(hrs).padStart(2, '0') + ':' + String(mins).padStart(2, '0') + ':' + String(rem).padStart(2, '0')
+                        : String(mins).padStart(2, '0') + ':' + String(rem).padStart(2, '0');
+                    
+                    const ctime = (v.created_time || 0) * 1000;
+                    const dateStr = ctime ? new Date(ctime).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                    const isImported = !!exMap[v.id];
+
+                    return {
+                        id: v.id,
+                        title: v.title || 'Untitled Lesson',
+                        duration: durStr,
+                        duration_seconds: secs,
+                        thumbnail_url: v.thumbnail_240_url || ('https://www.dailymotion.com/thumbnail/video/' + v.id),
+                        created_time: v.created_time || 0,
+                        created_formatted: dateStr,
+                        private: !!v.private,
+                        account_id: data.account_id,
+                        account_name: data.account_name,
+                        is_imported: isImported,
+                        imported_info: isImported ? exMap[v.id] : null
+                    };
+                });
+
+                if (page === 1) {
+                    pickerVideosData = formatted;
+                } else {
+                    pickerVideosData = pickerVideosData.concat(formatted);
+                }
+
+                document.getElementById('pickerTotalStatus').textContent = 
+                    'Total ' + (dmJson.total || pickerVideosData.length) + ' videos on account (sorted newest first)';
+
+                if (dmJson.has_more) {
+                    loadMoreBtn.classList.remove('hidden');
+                } else {
+                    loadMoreBtn.classList.add('hidden');
+                }
+
+                renderPickerVideos();
+                return;
+            } catch (dmErr) {
+                emptyEl.classList.remove('hidden');
+                emptyEl.querySelector('p').textContent = 'Direct sync error: ' + dmErr.message;
+                return;
+            }
+        }
+
         if (page === 1) {
             pickerVideosData = data.videos || [];
         } else {
