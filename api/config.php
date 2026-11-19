@@ -393,18 +393,47 @@ function httpPostDailymotion($url, $postData, $headers = []) {
 
 /**
  * Robust HTTP GET helper for Dailymotion API.
+ * Uses cURL first with browser User-Agent and SSL bypass, with stream context fallback.
  */
 function httpGetDailymotion($url, $headers = []) {
-    $headerStr = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nAccept: application/json\r\n";
+    $curlHeaders = [
+        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept: application/json'
+    ];
     foreach ($headers as $h) {
-        $headerStr .= $h . "\r\n";
+        $curlHeaders[] = $h;
     }
 
+    // Try cURL first
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $curlHeaders);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        $res = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($res && $httpCode >= 200 && $httpCode < 400) {
+            return $res;
+        }
+        if ($res && $httpCode >= 400) {
+            // Return Dailymotion API error JSON directly
+            return $res;
+        }
+    }
+
+    // Fallback to stream context
+    $headerStr = implode("\r\n", $curlHeaders) . "\r\n";
     $opts = [
         'http' => [
             'method' => 'GET',
             'header' => $headerStr,
-            'timeout' => 12,
+            'timeout' => 15,
             'ignore_errors' => true
         ],
         'ssl' => [
@@ -413,22 +442,7 @@ function httpGetDailymotion($url, $headers = []) {
         ]
     ];
     $ctx = stream_context_create($opts);
-    $res = @file_get_contents($url, false, $ctx);
-
-    if (!$res) {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        if (!empty($headers)) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        }
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-        $res = curl_exec($ch);
-        curl_close($ch);
-    }
-
-    return $res;
+    return @file_get_contents($url, false, $ctx);
 }
 
 /**

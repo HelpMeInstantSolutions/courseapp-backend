@@ -927,6 +927,15 @@ switch ($action) {
         }
 
         $dmData = json_decode($res, true);
+        if (isset($dmData['error']) && (strpos(strtolower($dmData['error']['message'] ?? ''), 'token') !== false || ($dmData['error']['code'] ?? 0) == 401)) {
+            // Force refresh token and retry
+            $token = refreshDmAccount($pdo, $fullAccount, true);
+            if ($token) {
+                $res = httpGetDailymotion($apiUrl, ["Authorization: Bearer {$token}"]);
+                $dmData = json_decode($res, true);
+            }
+        }
+
         if (isset($dmData['error'])) {
             sendResponse(false, "Dailymotion error: " . ($dmData['error']['message'] ?? 'Unknown error'), $dmData['error'], 400);
         }
